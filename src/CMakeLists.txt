@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 project(gbemu)
 
 add_executable(gbemu
-    hello.c
+    main.c
+    mem.c
 )
 
 target_include_directories(gbemu
