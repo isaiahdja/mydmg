@@ -50,10 +50,10 @@ static uint8_t MEMORY[MEM_SIZE];
 #define WX_REG      0xFF4B
 /* ... */
 
-/* Initialize memory */
+/* Initialize memory. */
 bool mem_init()
 {
-    /* Map first two ROM banks to memory */
+    /* Map first two ROM banks to memory. */
     size_t read_size = BANK_0_SIZE + BANK_1_SIZE;
     size_t read = SDL_ReadIO(
         rom_io, MEMORY + BANK_0_START, read_size);
@@ -66,7 +66,7 @@ bool mem_init()
     memcpy(&title, MEMORY + 0x0134, 16);
     SDL_Log("Opened %s", title);
 
-    /* TODO: DMG boot handoff state */
+    /* TODO: DMG boot handoff state. */
 
 #if DEBUG
     mem_dump();
@@ -75,6 +75,7 @@ bool mem_init()
     return true;
 }
 
+/* Dump the full contents of the memory. */
 void mem_dump()
 {
     static int count = 0;
@@ -95,6 +96,7 @@ void mem_dump()
     }
 }
 
+/* Read one byte from memory at [addr]. */
 uint8_t mem_read(uint16_t addr)
 {
     if (addr >= MEM_SIZE) {
@@ -104,6 +106,7 @@ uint8_t mem_read(uint16_t addr)
     return MEMORY[addr];
 }
 
+/* Write byte to memory at [addr]. */
 void mem_write(uint16_t addr, uint8_t byte)
 {
     if (addr >= MEM_SIZE) {

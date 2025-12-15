@@ -12,10 +12,10 @@ static uint16_t reg_SP;
 static uint16_t reg_PC;
 static bool flag_IME;
 
-/* Initialize CPU */
+/* Initialize CPU. */
 bool cpu_init()
 {
-    /* DMG boot handoff state */
+    /* DMG boot handoff state. */
     reg_A = 0x01;
     flag_Z = true;
     flag_N = false;
@@ -37,6 +37,7 @@ bool cpu_init()
     return true;
 }
 
+/* Dump the CPU registers and flags. */
 void cpu_dump()
 {
     SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM,

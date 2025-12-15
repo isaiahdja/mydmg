@@ -9,6 +9,12 @@ struct button {
 
 #define NUM_BUTTONS 8
 
+/*
+    NOTE:
+    The order here mirrors the button order from most-significant to
+    least-significant bit in the lower nibble of the joypad register.
+    Changing the order will break get_joyp_nibble, as it relies on this.
+*/
 static struct button buttons[NUM_BUTTONS] = {
     /* Action buttons */
     { SDL_SCANCODE_U,   false },    /* Start  */
@@ -22,13 +28,7 @@ static struct button buttons[NUM_BUTTONS] = {
     { SDL_SCANCODE_D,   false }     /* Right  */
 };
 
-static void print_byte(uint8_t byte)
-{
-    for (int i = 7; i >= 0; i--)
-        printf("%d", (byte >> i) & 1);
-    printf("\n");
-}
-
+/* Update stored input state. */
 void poll_inputs()
 {
     const bool *keys = SDL_GetKeyboardState(NULL);
@@ -36,6 +36,12 @@ void poll_inputs()
         buttons[i].pressed = keys[buttons[i].scancode];
 }
 
+/*
+    Get lower nibble of the joypad register according to the most recent
+    input state.
+    action = true reads the action buttons (SsBA).
+    direction = true reads the D-pad.
+*/
 uint8_t get_joyp_nibble(bool action, bool direction)
 {
     uint8_t nibble = 0x0F;

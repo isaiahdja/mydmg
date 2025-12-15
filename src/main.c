@@ -24,6 +24,7 @@ static void update(void);
 
 int main(int argc, char *argv[])
 {
+    /* Initalize SDL, open ROM file. */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         goto failure;
 
@@ -44,12 +45,14 @@ int main(int argc, char *argv[])
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_DEBUG);
 #endif
 
+    /* Initialize subsystems. */
     if (!(
         mem_init()
         && cpu_init()
     ))
         goto failure;
 
+    /* Main loop. */
     Uint64 counter_freq = SDL_GetPerformanceFrequency();
     while (running) {
         Uint64 start = SDL_GetPerformanceCounter();
@@ -66,25 +69,25 @@ int main(int argc, char *argv[])
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
 
-        /* TODO: Scale and display frame */
+        /* TODO: Scale and display frame. */
     }
 
+    /* Deinitialize. */
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
-
 failure:
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
     SDL_Quit();
     return -1;
 }
 
-/* Ticks all subsystems until a full frame is completed */
+/* Tick all subsystems until a full frame is completed. */
 static void update()
 {
     poll_inputs();
     for (int i = 0; i < m_cycles_per_frame; i++) {
-        /* TODO: Tick subsystems */
+        /* TODO: Tick subsystems. */
     }
 
     SDL_Event event;
