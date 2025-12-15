@@ -1,6 +1,8 @@
 #include "main.h"
 #include <SDL3/SDL_main.h>
 #include "mem.h"
+#include "cpu.h"
+#include "input.h"
 
 const int gb_width = 160;
 const int gb_height = 144;
@@ -19,7 +21,6 @@ static const double target_spf
 
 static bool running = true;
 static void update(void);
-static void poll_inputs(void);
 
 int main(int argc, char *argv[])
 {
@@ -45,6 +46,7 @@ int main(int argc, char *argv[])
 
     if (!(
         mem_init()
+        && cpu_init()
     ))
         goto failure;
 
@@ -63,6 +65,8 @@ int main(int argc, char *argv[])
         else
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
+
+        /* TODO: Scale and display frame */
     }
 
     SDL_DestroyWindow(window);
@@ -75,15 +79,14 @@ failure:
     return -1;
 }
 
+/* Ticks all subsystems until a full frame is completed */
 static void update()
 {
     poll_inputs();
+    for (int i = 0; i < m_cycles_per_frame; i++) {
+        /* TODO: Tick subsystems */
+    }
 
-    SDL_PumpEvents();
-    if (SDL_HasEvent(SDL_EVENT_WINDOW_CLOSE_REQUESTED))
-        running = false;
-
-/*
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
@@ -92,13 +95,4 @@ static void update()
                 break;
         }
     }
-*/
-}
-
-static void poll_inputs()
-{
-    const bool *keys = SDL_GetKeyboardState(NULL);
-
-    if (keys[SDL_SCANCODE_Z])
-        SDL_Log("Z");
 }

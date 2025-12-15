@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define MEM_SIZE 0x10000
+static uint8_t MEMORY[MEM_SIZE];
+
 #define BANK_0_START    0x0000
 #define BANK_0_SIZE                 0x4000
 #define BANK_1_START    0x4000
@@ -18,26 +21,39 @@
 #define OAM_START       0xFE00
 #define OAM_SIZE                    0x00A0
 #define UNUSED_START    0xFEA0
-#define UNUSED_SIZE                0x0060
+#define UNUSED_SIZE                 0x0060
 #define IO_REGS_START   0xFF00
 #define IO_REGS_SIZE                0x0080
 #define HRAM_START      0xFF80
 #define HRAM_SIZE                   0x007F
-#define IE_REG_START    0xFFFF
-#define IE_REG_SIZE                 0x0001
+#define IE_REG          0xFFFF
 
-#define MEM_SIZE 0x10000
-static uint8_t MEMORY[MEM_SIZE];
+#define JOYP_REG    0xFF00
+/* ... */
+#define DIV_REG     0xFF40
+#define TIMA_REG    0xFF05
+#define TMA_REG     0xFF06
+#define TAC_REG     0xFF07
+#define IF_REG      0xFF0F
+/* ... */
+#define LCDC_REG    0xFF40
+#define STAT_REG    0xFF41
+#define SCY_REG     0xFF42
+#define SCX_REG     0xFF43
+#define LY_REG      0xFF44
+#define LYC_REG     0xFF45
+#define DMA_REG     0xFF46
+#define BGP_REG     0xFF47
+#define OBP0_REG    0xFF48
+#define OBP1_REG    0xFF49
+#define WY_REG      0xFF4A
+#define WX_REG      0xFF4B
+/* ... */
 
-#define mem_dump_default() mem_dump(16, "memdump")
-
+/* Initialize memory */
 bool mem_init()
 {
-#if DEBUG
-    SDL_RemovePath("memdump");
-#endif
-
-    /* Map ROM into memory */
+    /* Map first two ROM banks to memory */
     size_t read_size = BANK_0_SIZE + BANK_1_SIZE;
     size_t read = SDL_ReadIO(
         rom_io, MEMORY + BANK_0_START, read_size);
@@ -45,52 +61,54 @@ bool mem_init()
         SDL_SetError("Failed reading ROM file");
         return false;
     }
-    mem_dump_default();
 
     char title[16];
-    mem_read((void*)&title, 0x0134, 16);
+    memcpy(&title, MEMORY + 0x0134, 16);
     SDL_Log("Opened %s", title);
+
+    /* TODO: DMG boot handoff state */
+
+#if DEBUG
+    mem_dump();
+#endif
 
     return true;
 }
 
-void mem_dump(int bytes_per_line, const char *file_path)
+void mem_dump()
 {
     static int count = 0;
     count++;
 
-    SDL_IOStream *io = SDL_IOFromFile(file_path, "a");
-    if (io == NULL)
-        return;
-
+    size_t line_max = 64;
+    char line[line_max];
+    int written = 0;
     for (int i = 0; i < MEM_SIZE; i++) {
         if (i == 0) 
-            SDL_IOprintf(io, "MEMORY DUMP %d:",count );
-        if (i % bytes_per_line == 0)
-            SDL_IOprintf(io, "\n0x%04X ", i);
-        SDL_IOprintf(io, "%02X ", MEMORY[i]);
+            written += snprintf(line, line_max, "MEMORY DUMP %d:", count);
+        if (i % 16 == 0) {
+            SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "%s", line);
+            memset(line, 0, line_max);
+            written = snprintf(line, line_max, "%04X |", i);
+        }
+        written += snprintf(line + written, line_max, " %02X", MEMORY[i]);
     }
-    SDL_IOprintf(io, "\n\n");
-
-    SDL_CloseIO(io);
 }
 
-void mem_read(void *dst, uint16_t start, size_t bytes)
+uint8_t mem_read(uint16_t addr)
 {
-    if (start + bytes > MEM_SIZE) {
-        SDL_LogCritical(
-            SDL_LOG_CATEGORY_APPLICATION, "Memory read is out-of-bounds");
-        return;
+    if (addr >= MEM_SIZE) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid memory read");
+        return 0;
     }
-    memcpy(dst, MEMORY + start, bytes);
+    return MEMORY[addr];
 }
 
-void mem_write(void *src, uint16_t start, size_t bytes)
+void mem_write(uint16_t addr, uint8_t byte)
 {
-    if (start + bytes > MEM_SIZE) {
-        SDL_LogCritical(
-            SDL_LOG_CATEGORY_APPLICATION, "Memory write is out-of-bounds");
+    if (addr >= MEM_SIZE) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid memory write");
         return;
     }
-    memcpy(MEMORY + start, src, bytes);
+    MEMORY[addr] = byte;
 }
