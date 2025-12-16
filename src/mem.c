@@ -2,71 +2,97 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdint.h>
+#include "input.h"
 
 #define MEM_SIZE 0x10000
 static uint8_t MEMORY[MEM_SIZE];
 
-#define BANK_0_START    0x0000
-#define BANK_0_SIZE                 0x4000
-#define BANK_1_START    0x4000
-#define BANK_1_SIZE                 0x4000
-#define VRAM_START      0x8000
-#define VRAM_SIZE                   0x2000
-#define EXT_RAM_START   0xA000
-#define EXT_RAM_SIZE                0x2000
-#define WRAM_START      0xC000
-#define WRAM_SIZE                   0x1000
-#define ECHO_START      0xE000
-#define ECHO_SIZE                   0x1E00
-#define OAM_START       0xFE00
-#define OAM_SIZE                    0x00A0
-#define UNUSED_START    0xFEA0
-#define UNUSED_SIZE                 0x0060
-#define IO_REGS_START   0xFF00
-#define IO_REGS_SIZE                0x0080
-#define HRAM_START      0xFF80
-#define HRAM_SIZE                   0x007F
-#define IE_REG          0xFFFF
+#define BANK_0_START  0x0000
+#define BANK_0_SIZE          0x4000
+#define BANK_1_START  0x4000
+#define BANK_1_SIZE          0x4000
+#define VRAM_START    0x8000
+#define VRAM_SIZE            0x2000
+#define EXT_RAM_START 0xA000
+#define EXT_RAM_SIZE         0x2000
+#define WRAM_START    0xC000
+#define WRAM_SIZE            0x1000
+#define ECHO_START    0xE000
+#define ECHO_SIZE            0x1E00
+#define OAM_START     0xFE00
+#define OAM_SIZE             0x00A0
+#define UNUSED_START  0xFEA0
+#define UNUSED_SIZE          0x0060
+#define IO_REGS_START 0xFF00
+#define IO_REGS_SIZE         0x0080
+#define HRAM_START    0xFF80
+#define HRAM_SIZE            0x007F
 
-#define JOYP_REG    0xFF00
+/* R/W bitmasks : 0 = R, 1 = R/W. */
+#define JOYP_REG 0xFF00
+#define JOYP_RW_MASK    0x30
 /* ... */
-#define DIV_REG     0xFF40
-#define TIMA_REG    0xFF05
-#define TMA_REG     0xFF06
-#define TAC_REG     0xFF07
-#define IF_REG      0xFF0F
+#define DIV_REG  0xFF04
+#define DIV_RW_MASK     0x00
+#define TIMA_REG 0xFF05
+#define TIMA_RW_MASK    0xFF
+#define TMA_REG  0xFF06
+#define TMA_RW_MASK     0xFF
+#define TAC_REG  0xFF07
+#define TAC_RW_MASK     0x07
+#define IF_REG   0xFF0F
 /* ... */
-#define LCDC_REG    0xFF40
-#define STAT_REG    0xFF41
-#define SCY_REG     0xFF42
-#define SCX_REG     0xFF43
-#define LY_REG      0xFF44
-#define LYC_REG     0xFF45
-#define DMA_REG     0xFF46
-#define BGP_REG     0xFF47
-#define OBP0_REG    0xFF48
-#define OBP1_REG    0xFF49
-#define WY_REG      0xFF4A
-#define WX_REG      0xFF4B
+#define LCDC_REG 0xFF40
+#define STAT_REG 0xFF41
+#define SCY_REG  0xFF42
+#define SCX_REG  0xFF43
+#define LY_REG   0xFF44
+#define LYC_REG  0xFF45
+#define DMA_REG  0xFF46
+#define BGP_REG  0xFF47
+#define OBP0_REG 0xFF48
+#define OBP1_REG 0xFF49
+#define WY_REG   0xFF4A
+#define WX_REG   0xFF4B
 /* ... */
+#define IE_REG   0xFFFF
+
+static uint64_t get_bits(uint64_t num, int high, int low);
+static inline uint64_t get_bit(uint64_t num, int idx);
+
+static void inline write_masked(uint16_t addr, uint8_t byte, uint8_t rw_mask);
+
+static void io_write(uint16_t, uint8_t byte);
+static void load_joyp_nibble(void);
+static void zero_div(void);
+static void update_tac_caches(void);
+
+/* Used as the internal system counter (counts M-cycles).
+Game Boy logic is only ever concerned with the lower 14 bits. */
+uint64_t counter;
+
+/* Caches TAC bit 2. */
+bool tac_enabled;
+/* Caches the bit that should be read from the system counter
+according to TAC bits 1 through 0 (clock select). */
+int tac_counter_bit_idx;
+/* Used to detect falling edge for timer behavior. */
+int prev_timer_signal;
+/* Used to implement overflow logic on the next M-cycle. */
+bool timer_overflowed;
+/* Used to save the value of TMA at overflow. */
+uint8_t tma_overflow_save;
 
 /* Initialize memory. */
 bool mem_init()
 {
     /* Map first two ROM banks to memory. */
-    size_t read_size = BANK_0_SIZE + BANK_1_SIZE;
-    size_t read = SDL_ReadIO(
-        rom_io, MEMORY + BANK_0_START, read_size);
-    if (read < read_size) {
-        SDL_SetError("Failed reading ROM file");
-        return false;
-    }
-
-    char title[16];
-    memcpy(&title, MEMORY + 0x0134, 16);
-    SDL_Log("Opened %s", title);
+    rom_copy(MEMORY, 0, BANK_0_SIZE + BANK_1_SIZE);
 
     /* TODO: DMG boot handoff state. */
+    tac_enabled = true;
+    tac_counter_bit_idx = 1;
+    MEMORY[TMA_REG] = 0xFE;
 
 #if DEBUG
     mem_dump();
@@ -75,7 +101,7 @@ bool mem_init()
     return true;
 }
 
-/* Dump the full contents of the memory. */
+/* Dump the full contents of memory. */
 void mem_dump()
 {
     static int count = 0;
@@ -96,7 +122,7 @@ void mem_dump()
     }
 }
 
-/* Read one byte from memory at [addr]. */
+/* Read one byte from memory at addr. */
 uint8_t mem_read(uint16_t addr)
 {
     if (addr >= MEM_SIZE) {
@@ -106,12 +132,125 @@ uint8_t mem_read(uint16_t addr)
     return MEMORY[addr];
 }
 
-/* Write byte to memory at [addr]. */
+/* Write byte to memory at addr. */
 void mem_write(uint16_t addr, uint8_t byte)
 {
     if (addr >= MEM_SIZE) {
         SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid memory write");
         return;
     }
-    MEMORY[addr] = byte;
+
+    if (addr < BANK_1_SIZE + BANK_1_SIZE) {}
+    else if (addr < VRAM_START + VRAM_SIZE) {}
+    else if (addr < EXT_RAM_START + EXT_RAM_SIZE) {}
+    else if (addr < WRAM_START + WRAM_SIZE) {}
+    else if (addr < ECHO_START + ECHO_SIZE) {}
+    else if (addr < OAM_START + OAM_SIZE) {}
+    else if (addr < UNUSED_START + UNUSED_SIZE) {}
+    else if (addr < IO_REGS_START + IO_REGS_SIZE || addr == IE_REG)
+        io_write(addr, byte);
+    else if (addr < HRAM_START + HRAM_SIZE) {}
 }
+
+/* Simulate one M-cycle for the memory.
+- Update I/O registers. */
+void mem_tick()
+{
+    //printf("TIMA = %X DIV = %X\n", MEMORY[TIMA_REG], MEMORY[DIV_REG]);
+    counter++;
+
+    /* Model behavior of timer registers. */
+    MEMORY[DIV_REG] = (uint8_t)(counter >> 6);
+
+    if (timer_overflowed) {
+        timer_overflowed = false;
+        MEMORY[TIMA_REG] = tma_overflow_save;
+        /* TODO: Request timer interrupt here. */
+    }
+
+    int next_timer_signal = get_bit(counter, tac_counter_bit_idx) & tac_enabled;
+    if (next_timer_signal == 0 && prev_timer_signal == 1) {
+        /* Falling edge detected. */
+        if (++MEMORY[TIMA_REG] == 0) {
+            /* Timer overflow.
+            We load the current value of TMA to TIMA on the *next* M-cycle. */
+            timer_overflowed = true;
+            tma_overflow_save = MEMORY[TMA_REG];
+        }
+    }
+    prev_timer_signal = next_timer_signal;
+}
+
+/* Retrieve bits high through low (inclusive) from num. */
+static uint64_t get_bits(uint64_t num, int high, int low) {
+    int width = high - low + 1;
+    if (width >= 64)
+        return num >> low;
+    return (num >> low) & (((uint64_t)0x1 << width) - 1);
+}
+
+/* Retrieve bit idx from num. */
+static inline uint64_t get_bit(uint64_t num, int idx) {
+    return get_bits(num, idx, idx);
+}
+
+static void inline write_masked(uint16_t addr, uint8_t byte, uint8_t rw_mask) {
+    MEMORY[addr] &= ~rw_mask;
+    MEMORY[addr] |= (byte & rw_mask);
+}
+
+static void io_write(uint16_t addr, uint8_t byte)
+{
+    /* Enforce R/W bits and special write behavior for I/O registers. */
+    /* TODO: Refactor (?) */
+    uint8_t rw_mask = 0xFF;
+    void (*write_hook)(void) = NULL;
+    switch (addr) {
+        case JOYP_REG:
+            rw_mask = JOYP_RW_MASK;
+            write_hook = &load_joyp_nibble;
+            break;
+        case DIV_REG:
+            rw_mask = DIV_RW_MASK;
+            write_hook = &zero_div;
+        case TIMA_REG:
+            rw_mask = TIMA_RW_MASK;
+            break;
+        case TMA_REG:
+            rw_mask = TMA_RW_MASK;
+            break;
+        case TAC_REG:
+            rw_mask = TAC_RW_MASK;
+            write_hook = &update_tac_caches;
+            break;
+    }
+
+    write_masked(addr, byte, rw_mask);
+    if (write_hook != NULL)
+        write_hook();
+}
+
+static void load_joyp_nibble()
+{
+    uint8_t byte = MEMORY[JOYP_REG];
+    /* 0 = selected, 1 = not selected (active-low). */
+    bool action = !get_bit(byte, 5);
+    bool direction = !get_bit(byte, 4);
+    write_masked(JOYP_REG, get_joyp_nibble(action, direction), 0xF0);
+}
+
+static void zero_div() { MEMORY[DIV_REG] = 0x00; }
+
+static void update_tac_caches()
+{
+    uint8_t byte = MEMORY[TAC_REG];
+    tac_enabled = get_bit(byte, 2); /* 0 = disabled, 1 = enabled (active-high).*/
+    switch (get_bits(byte, 1, 0)) {
+        case 0x0: tac_counter_bit_idx = 7; break;
+        case 0x1: tac_counter_bit_idx = 1; break;
+        case 0x2: tac_counter_bit_idx = 3; break;
+        case 0x3: tac_counter_bit_idx = 5; break;
+    }
+}
+
+/* TODO: MBC scaffolding. */

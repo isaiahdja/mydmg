@@ -37,7 +37,7 @@ bool cpu_init()
     return true;
 }
 
-/* Dump the CPU registers and flags. */
+/* Dump CPU registers and flags. */
 void cpu_dump()
 {
     SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM,
@@ -52,4 +52,10 @@ void cpu_dump()
         reg_A, reg_B, reg_C, reg_D, reg_E, reg_H, reg_L, reg_SP, reg_PC,
         flag_Z, flag_N, flag_H, flag_C, flag_IME
     );
+}
+
+/* Simulate one M-cycle for the CPU. */
+void cpu_tick()
+{
+
 }

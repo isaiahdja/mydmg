@@ -5,4 +5,4 @@
 extern const int gb_width;
 extern const int gb_height;
 
-extern SDL_IOStream *rom_io;
+void rom_copy(void *dst, size_t start, size_t size);

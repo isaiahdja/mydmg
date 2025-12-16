@@ -3,6 +3,10 @@
 #include "mem.h"
 #include "cpu.h"
 #include "input.h"
+#include <stdio.h>
+
+static uint8_t *ROM_FILE;
+size_t rom_size;
 
 const int gb_width = 160;
 const int gb_height = 144;
@@ -10,21 +14,18 @@ const int scale_factor = 3;
 const int window_width = gb_width * scale_factor;
 const int window_height = gb_height * scale_factor;
 
-SDL_IOStream *rom_io;
-
 static const int t_cycles_per_sec = (1 << 22);
 static const int t_cycles_per_frame = 70244;
 static const int t_m_ratio = 4;
 static const int m_cycles_per_frame = t_cycles_per_frame / t_m_ratio;
 static const double target_spf
     = (double)t_cycles_per_frame / (double)t_cycles_per_sec;
-
+    
 static bool running = true;
 static void update(void);
 
 int main(int argc, char *argv[])
 {
-    /* Initalize SDL, open ROM file. */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         goto failure;
 
@@ -33,9 +34,22 @@ int main(int argc, char *argv[])
         goto failure;
     }
 
-    rom_io = SDL_IOFromFile(argv[1], "rb");
-    if (rom_io == NULL)
+    /* Open ROM file. */
+    ROM_FILE = (uint8_t*)SDL_LoadFile(argv[1], &rom_size);
+    if (ROM_FILE == NULL) {
+        SDL_SetError("Failed reading provided file");
         goto failure;
+    }
+    if (rom_size < 0x8000) {
+        SDL_SetError(
+            "Provided file does not appear to be a valid "
+            "Game Boy ROM file");
+        goto failure;
+    }
+    /* TODO: Check other header information. */
+    char title[16];
+    memcpy(title, ROM_FILE + 0x134, 16);
+    SDL_Log("Opened %s\n", title);
 
     SDL_Window *window = SDL_CreateWindow(
         "gbemu", window_width, window_height, 0);
@@ -49,8 +63,10 @@ int main(int argc, char *argv[])
     if (!(
         mem_init()
         && cpu_init()
-    ))
+    )) {
+        SDL_SetError("Failed to initialize subsystems");
         goto failure;
+    }
 
     /* Main loop. */
     Uint64 counter_freq = SDL_GetPerformanceFrequency();
@@ -74,10 +90,15 @@ int main(int argc, char *argv[])
 
     /* Deinitialize. */
     SDL_DestroyWindow(window);
+    SDL_free(ROM_FILE);
     SDL_Quit();
     return 0;
 failure:
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
+    if (window != NULL)
+        SDL_DestroyWindow(window);
+    if (ROM_FILE != NULL)
+        SDL_free(ROM_FILE);
     SDL_Quit();
     return -1;
 }
@@ -87,7 +108,10 @@ static void update()
 {
     poll_inputs();
     for (int i = 0; i < m_cycles_per_frame; i++) {
-        /* TODO: Tick subsystems. */
+        /* Tick subsystems.
+        (Order must be maintained.) */
+        cpu_tick();
+        mem_tick();
     }
 
     SDL_Event event;
@@ -98,4 +122,13 @@ static void update()
                 break;
         }
     }
+}
+
+/* TODO: Move this function (?) */
+void rom_copy(void *dst, size_t start, size_t size) {
+    if (start + size > rom_size) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid call to rom_copy()");
+        return;
+    }
+    memcpy(dst, ROM_FILE + start, size);
 }
