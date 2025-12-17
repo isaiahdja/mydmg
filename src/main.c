@@ -107,6 +107,7 @@ failure:
 static void update()
 {
     poll_inputs();
+    load_joyp_nibble();
     for (int i = 0; i < m_cycles_per_frame; i++) {
         /* Tick subsystems.
         (Order must be maintained.) */

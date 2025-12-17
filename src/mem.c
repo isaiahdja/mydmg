@@ -63,8 +63,6 @@ static inline uint64_t get_bit(uint64_t num, int idx);
 static void inline write_masked(uint16_t addr, uint8_t byte, uint8_t rw_mask);
 
 static void io_write(uint16_t, uint8_t byte);
-static void load_joyp_nibble(void);
-static void zero_div(void);
 static void update_tac_caches(void);
 
 /* Used as the internal system counter (counts M-cycles).
@@ -89,10 +87,29 @@ bool mem_init()
     /* Map first two ROM banks to memory. */
     rom_copy(MEMORY, 0, BANK_0_SIZE + BANK_1_SIZE);
 
-    /* TODO: DMG boot handoff state. */
-    tac_enabled = true;
-    tac_counter_bit_idx = 1;
-    MEMORY[TMA_REG] = 0xFE;
+    /* DMG boot handoff state. */
+    MEMORY[JOYP_REG] = 0xCF;
+    /* ... */
+    MEMORY[DIV_REG] = 0x18;
+    MEMORY[TIMA_REG] = 0x00;
+    MEMORY[TMA_REG] = 0x00;
+    MEMORY[TAC_REG] = 0xF8; update_tac_caches();
+    MEMORY[IF_REG] = 0xE1;
+    /* ... */
+    MEMORY[LCDC_REG] = 0x91;
+    MEMORY[STAT_REG] = 0x81;
+    MEMORY[SCY_REG] = 0x00;
+    MEMORY[SCX_REG] = 0x00;
+    MEMORY[LY_REG] = 0x91;
+    MEMORY[LYC_REG] = 0x00;
+    MEMORY[DMA_REG] = 0xFF;
+    MEMORY[BGP_REG] = 0xFC;
+    MEMORY[OBP0_REG] = 0x00;
+    MEMORY[OBP1_REG] = 0x00;
+    MEMORY[WY_REG] = 0x00;
+    MEMORY[WX_REG] = 0x00;
+    /* ... */
+    MEMORY[IE_REG] = 0x00;
 
 #if DEBUG
     mem_dump();
@@ -125,38 +142,49 @@ void mem_dump()
 /* Read one byte from memory at addr. */
 uint8_t mem_read(uint16_t addr)
 {
-    if (addr >= MEM_SIZE) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid memory read");
-        return 0;
-    }
     return MEMORY[addr];
 }
 
 /* Write byte to memory at addr. */
 void mem_write(uint16_t addr, uint8_t byte)
 {
-    if (addr >= MEM_SIZE) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Invalid memory write");
+    /* HRAM is always writeable. */
+    if (addr >= HRAM_START && addr < HRAM_START + HRAM_SIZE) {
+        MEMORY[addr] = byte;
         return;
     }
 
-    if (addr < BANK_1_SIZE + BANK_1_SIZE) {}
-    else if (addr < VRAM_START + VRAM_SIZE) {}
-    else if (addr < EXT_RAM_START + EXT_RAM_SIZE) {}
-    else if (addr < WRAM_START + WRAM_SIZE) {}
-    else if (addr < ECHO_START + ECHO_SIZE) {}
-    else if (addr < OAM_START + OAM_SIZE) {}
-    else if (addr < UNUSED_START + UNUSED_SIZE) {}
+    if (false) /* TODO: Check DMA transfer status. */
+        return;
+
+    if (addr < BANK_1_START + BANK_1_SIZE) {
+        /* TODO: Pass to MBC. */
+        return;
+    }
+    else if (addr < VRAM_START + VRAM_SIZE) {
+        /* TODO: Check PPU mode. */
+    }
+    else if (addr < EXT_RAM_START + EXT_RAM_SIZE) {
+        /* TODO: Pass to MBC. */
+        return;
+    }
+    else if (addr < WRAM_START + WRAM_SIZE)
+        MEMORY[addr] = byte;
+    else if (addr < ECHO_START + ECHO_SIZE)
+        MEMORY[addr - 0x2000] = byte; /* Maps to WRAM */
+    else if (addr < OAM_START + OAM_SIZE) {
+        /* TODO: Check PPU mode. */
+    }
+    else if (addr < UNUSED_START + UNUSED_SIZE)
+        return;
     else if (addr < IO_REGS_START + IO_REGS_SIZE || addr == IE_REG)
         io_write(addr, byte);
-    else if (addr < HRAM_START + HRAM_SIZE) {}
 }
 
 /* Simulate one M-cycle for the memory.
 - Update I/O registers. */
 void mem_tick()
 {
-    //printf("TIMA = %X DIV = %X\n", MEMORY[TIMA_REG], MEMORY[DIV_REG]);
     counter++;
 
     /* Model behavior of timer registers. */
@@ -202,49 +230,43 @@ static void inline write_masked(uint16_t addr, uint8_t byte, uint8_t rw_mask) {
 static void io_write(uint16_t addr, uint8_t byte)
 {
     /* Enforce R/W bits and special write behavior for I/O registers. */
-    /* TODO: Refactor (?) */
-    uint8_t rw_mask = 0xFF;
-    void (*write_hook)(void) = NULL;
     switch (addr) {
         case JOYP_REG:
-            rw_mask = JOYP_RW_MASK;
-            write_hook = &load_joyp_nibble;
+            write_masked(addr, byte, JOYP_RW_MASK);
+            load_joyp_nibble();
             break;
         case DIV_REG:
-            rw_mask = DIV_RW_MASK;
-            write_hook = &zero_div;
+            counter = 0;
+            break;
         case TIMA_REG:
-            rw_mask = TIMA_RW_MASK;
+            write_masked(addr, byte, TIMA_RW_MASK);
             break;
         case TMA_REG:
-            rw_mask = TMA_RW_MASK;
+            write_masked(addr, byte, TMA_RW_MASK);
             break;
         case TAC_REG:
-            rw_mask = TAC_RW_MASK;
-            write_hook = &update_tac_caches;
+            write_masked(addr, byte, TAC_RW_MASK);
+            update_tac_caches();
             break;
+        default:
+            write_masked(addr, byte, 0xFF);
     }
-
-    write_masked(addr, byte, rw_mask);
-    if (write_hook != NULL)
-        write_hook();
 }
 
-static void load_joyp_nibble()
+void load_joyp_nibble()
 {
     uint8_t byte = MEMORY[JOYP_REG];
     /* 0 = selected, 1 = not selected (active-low). */
-    bool action = !get_bit(byte, 5);
-    bool direction = !get_bit(byte, 4);
-    write_masked(JOYP_REG, get_joyp_nibble(action, direction), 0xF0);
+    bool action = get_bit(byte, 5) == 0;
+    bool direction = get_bit(byte, 4) == 0;
+    write_masked(JOYP_REG, get_joyp_nibble(action, direction), 0x0F);
 }
-
-static void zero_div() { MEMORY[DIV_REG] = 0x00; }
 
 static void update_tac_caches()
 {
     uint8_t byte = MEMORY[TAC_REG];
-    tac_enabled = get_bit(byte, 2); /* 0 = disabled, 1 = enabled (active-high).*/
+    /* 0 = disabled, 1 = enabled (active-high).*/
+    tac_enabled = get_bit(byte, 2) == 1;
     switch (get_bits(byte, 1, 0)) {
         case 0x0: tac_counter_bit_idx = 7; break;
         case 0x1: tac_counter_bit_idx = 1; break;

@@ -1,6 +1,7 @@
 #include "input.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
+#include "mem.h"
 
 struct button {
     SDL_Scancode scancode;
@@ -26,7 +27,7 @@ static struct button buttons[NUM_BUTTONS] = {
     { SDL_SCANCODE_D, false }  /* Right  */
 };
 
-/* Update stored input state, push to JOYP register. */
+/* Update stored input state. */
 void poll_inputs()
 {
     const bool *keys = SDL_GetKeyboardState(NULL);
@@ -50,4 +51,4 @@ uint8_t get_joyp_nibble(bool action, bool direction)
     return nibble;
 }
 
-/* TODO: Refactor joypad nibble handling in relation to mem.c functions. */
+/* TODO: Refactor joypad nibble handling in relation to mem.c functions (?) */
