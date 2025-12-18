@@ -1,5 +1,6 @@
-#include <stdint.h>
-#include <stdbool.h>
+#include "byte.h"
 
-void poll_inputs(void);
-uint8_t get_joyp_nibble(bool action, bool direction);
+void input_poll_and_load(void);
+
+byte input_joyp_read(void);
+void input_joyp_write(byte val);

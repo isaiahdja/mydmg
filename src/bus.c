@@ -1,0 +1,182 @@
+#include "bus.h"
+#include "system.h"
+#include "cart.h"
+#include "timer.h"
+#include "cpu.h"
+#include "ppu.h"
+#include "interrupt.h"
+#include "input.h"
+
+static byte io_read(uint16_t addr);
+static void io_write(uint16_t addr, byte val);
+static inline uint16_t map_echo_to_wram(uint16_t addr);
+
+byte bus_read_cpu(uint16_t addr)
+{
+    region_type region = get_addr_region(addr);
+
+    if (region == HRAM)
+        return hram_read(addr);
+
+    /* TODO: Check OAM DMA transfer. */
+    if (false)
+        return 0xFF;
+
+    ppu_mode mode = ppu_get_mode();
+    switch (region) {
+        case BANK0:
+        case BANK1:
+        case EXT_RAM:
+            return cart_read(addr);
+        case VRAM:
+            if (mode == MODE3_DRAW)
+                return 0xFF;
+            return vram_read(addr);
+        case ECHO:
+            addr = map_echo_to_wram(addr);
+        case WRAM:
+            return wram_read(addr);
+        case OAM:
+            if (mode == MODE2_OAM || mode == MODE3_DRAW)
+                return 0xFF;
+            return oam_read(addr);
+        case IO_REGS:
+            return io_read(addr);
+    }
+    
+    return 0xFF;
+}
+
+void bus_write_cpu(uint16_t addr, byte val)
+{
+    region_type region = get_addr_region(addr);
+
+    if (region == HRAM) {
+        hram_write(addr, val);
+        return;
+    }
+
+    /* TODO: Check OAM DMA transfer. */
+    if (false)
+        return;
+
+    ppu_mode mode = ppu_get_mode();
+    switch (region) {
+        case BANK0:
+        case BANK1:
+        case EXT_RAM:
+            cart_write(addr, val);
+            break;
+        case VRAM:
+            if (mode == MODE3_DRAW)
+                return;
+            vram_write(addr, val);
+            break;
+        case ECHO:
+            addr = map_echo_to_wram(addr);
+        case WRAM:
+            wram_write(addr, val);
+            break;
+        case OAM:
+            if (mode == MODE2_OAM || mode == MODE3_DRAW)
+                return;
+            oam_write(addr, val);
+            break;
+        case IO_REGS:
+            io_write(addr, val);
+            break;
+    }
+}
+
+byte bus_read_ppu(uint16_t addr)
+{
+    region_type region = get_addr_region(addr);
+    if (region == VRAM)
+        return vram_read(addr);
+    else if (region == OAM)
+        return oam_read(addr);
+    
+    return 0xFF;
+}
+
+region_type get_addr_region(uint16_t addr) {
+    if (addr < BANK0_START + BANK0_SIZE)
+        return BANK0;
+    else if (addr < BANK1_START + BANK1_SIZE)
+        return BANK1;
+    else if (addr < VRAM_START + VRAM_SIZE)
+        return VRAM;
+    else if (addr < EXT_RAM_START + EXT_RAM_SIZE)
+        return EXT_RAM;
+    else if (addr < WRAM_START + WRAM_SIZE)
+        return WRAM;
+    else if (addr < ECHO_START + ECHO_SIZE)
+        return ECHO;
+    else if (addr < OAM_START + OAM_SIZE)
+        return OAM;
+    else if (addr < UNUSED_START + UNUSED_SIZE)
+        return UNUSED;
+    else if (addr < IO_REGS_START + IO_REGS_SIZE || addr == IE_REG)
+        return IO_REGS;
+    else if (addr < HRAM_START + HRAM_SIZE)
+        return HRAM;
+    
+    return UNUSED;
+}
+
+static byte io_read(uint16_t addr)
+{
+    switch (addr) {
+        case JOYP_REG: return input_joyp_read();
+        /* ... */
+        case DIV_REG:  return timer_div_read();
+        case TIMA_REG: return timer_tima_read();
+        case TMA_REG:  return timer_tma_read();
+        case TAC_REG:  return timer_tac_read();
+        case IF_REG:   return interrupt_if_read();
+        /* ... */
+        case LCDC_REG: return ppu_lcdc_read();
+        case STAT_REG: return ppu_stat_read();
+        case SCY_REG:  return ppu_scy_read();
+        case SCX_REG:  return ppu_scx_read();
+        case DMA_REG:  return ppu_dma_read();
+        case BGP_REG:  return ppu_bgp_read();
+        case OBP0_REG: return ppu_obp0_read();
+        case OBP1_REG: return ppu_obp1_read();
+        case WY_REG:   return ppu_wy_read();
+        case WX_REG:   return ppu_wx_read();
+        /* ... */
+        case IE_REG:   return interrupt_ie_read();
+        default: return 0xFF;
+    }
+}
+
+static void io_write(uint16_t addr, byte val)
+{
+    switch (addr) {
+        case JOYP_REG: input_joyp_write(val);   break;
+        /* ... */
+        case DIV_REG:  timer_div_write(val);    break;
+        case TIMA_REG: timer_tima_write(val);   break;
+        case TMA_REG:  timer_tma_write(val);    break;
+        case TAC_REG:  timer_tac_write(val);    break;
+        case IF_REG:   interrupt_if_write(val); break;
+        /* ... */
+        case LCDC_REG: ppu_lcdc_write(val);     break;
+        case STAT_REG: ppu_stat_write(val);     break;
+        case SCY_REG:  ppu_scy_write(val);      break;
+        case SCX_REG:  ppu_scx_write(val);      break;
+        case DMA_REG:  ppu_dma_write(val);      break;
+        case BGP_REG:  ppu_bgp_write(val);      break;
+        case OBP0_REG: ppu_obp0_write(val);     break;
+        case OBP1_REG: ppu_obp1_write(val);     break;
+        case WY_REG:   ppu_wy_write(val);       break;
+        case WX_REG:   ppu_wx_write(val);       break;
+        /* ... */
+        case IE_REG:   interrupt_ie_write(val); break;
+    }
+}
+
+static inline uint16_t map_echo_to_wram(uint16_t addr) {
+    return overlay_masked(addr, 0xC000, 0xE000);
+}

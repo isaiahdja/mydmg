@@ -1,61 +1,40 @@
 #include "cpu.h"
-#include <stdint.h>
-#include <SDL3/SDL.h>
-#include "main.h"
+#include "bus.h"
 
-static uint8_t reg_A;
-static bool flag_Z, flag_N, flag_H, flag_C;
-static uint8_t reg_B, reg_C;
-static uint8_t reg_D, reg_E;
-static uint8_t reg_H, reg_L;
-static uint16_t reg_SP;
-static uint16_t reg_PC;
-static bool flag_IME;
+static byte hram[HRAM_SIZE];
 
-/* Initialize CPU. */
-bool cpu_init()
+static byte a_reg;
+bit z_flag, n_flag, h_flag, c_flag;
+static byte b_reg, c_reg;
+static byte d_reg, e_reg;
+static byte h_reg, l_reg;
+static uint16_t sp_reg;
+static uint16_t pc_reg;
+
+bool cpu_init(void)
 {
     /* DMG boot handoff state. */
-    reg_A = 0x01;
-    flag_Z = true;
-    flag_N = false;
-    flag_H = true; /* TODO: Checksum (?) */
-    flag_C = true;
-    reg_B = 0x00;
-    reg_C = 0x13;
-    reg_D = 0x00;
-    reg_E = 0xD8;
-    reg_H = 0x01;
-    reg_L = 0x4D;
-    reg_PC = 0x0100;
-    reg_SP = 0xFFFE;
-    flag_IME = false;
+    a_reg = 0x01;
+    /* TODO: Check header checksum (?) */
+    z_flag = 1; n_flag = 0, h_flag = 0; c_flag = 0;
+    b_reg = 0x00; c_reg = 0x13;
+    d_reg = 0x00; e_reg = 0xD8;
+    h_reg = 0x01; l_reg = 0x4D;
+    sp_reg = 0xFFFE;
+    pc_reg = 0x0100;
 
-#if DEBUG
-    cpu_dump();
-#endif
     return true;
 }
 
-/* Dump CPU registers and flags. */
-void cpu_dump()
+void cpu_tick(void)
 {
-    SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM,
-        "A : %02X\n"
-        "B : %02X | C : %02X\n"
-        "D : %02X | E : %02X\n"
-        "H : %02X | L : %02X\n"
-        "SP : %04X\n"
-        "PC : %04X\n"
-        "Z : %d | N : %d | H : %d | C : %d\n"
-        "IME : %d\n",
-        reg_A, reg_B, reg_C, reg_D, reg_E, reg_H, reg_L, reg_SP, reg_PC,
-        flag_Z, flag_N, flag_H, flag_C, flag_IME
-    );
+
 }
 
-/* Simulate one M-cycle for the CPU. */
-void cpu_tick()
-{
+byte hram_read(uint16_t addr) {
+    return hram[addr - HRAM_START];
+}
 
+void hram_write(uint16_t addr, byte val) {
+    hram[addr - HRAM_START] = val;
 }

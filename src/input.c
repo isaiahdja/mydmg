@@ -1,54 +1,86 @@
 #include "input.h"
+#include "bus.h"
 #include <SDL3/SDL.h>
-#include <stdio.h>
-#include "mem.h"
 
-struct button {
-    SDL_Scancode scancode;
+#define JOYP_RW_MASK 0x30
+
+static byte joyp_reg;
+
+typedef struct {
     bool pressed;
-};
+
+    SDL_Scancode scancode;
+} button;
+
+typedef enum {
+    START, SELECT, B, A,
+    DOWN, UP, LEFT, RIGHT
+} button_type;
 
 #define NUM_BUTTONS 8
 
-/* NOTE:
-The order here mirrors the button order from most-significant to
-least-significant bit in the lower nibble of the joypad register.
-Changing the order will break get_joyp_nibble, as it relies on this. */
-static struct button buttons[NUM_BUTTONS] = {
-    /* Action buttons */
-    { SDL_SCANCODE_U, false }, /* Start  */
-    { SDL_SCANCODE_I, false }, /* Select */
-    { SDL_SCANCODE_J, false }, /*   B    */
-    { SDL_SCANCODE_K, false }, /*   A    */
-    /* Direction buttons */
-    { SDL_SCANCODE_S, false }, /*  Down  */
-    { SDL_SCANCODE_W, false }, /*   Up   */
-    { SDL_SCANCODE_A, false }, /*  Left  */
-    { SDL_SCANCODE_D, false }  /* Right  */
+static button buttons[NUM_BUTTONS] = {
+    [START]  = { false, SDL_SCANCODE_U },
+    [SELECT] = { false, SDL_SCANCODE_I },
+    [B]      = { false, SDL_SCANCODE_J },
+    [A]      = { false, SDL_SCANCODE_K },
+    [DOWN]   = { false, SDL_SCANCODE_S },
+    [UP]     = { false, SDL_SCANCODE_W },
+    [LEFT]   = { false, SDL_SCANCODE_A },
+    [RIGHT]  = { false, SDL_SCANCODE_D }
 };
 
-/* Update stored input state. */
-void poll_inputs()
+static void load_joyp_nibble();
+
+bool input_init()
+{
+    /* DMG boot handoff state. */
+    joyp_reg = 0xCF;
+
+    return true;
+}
+
+void input_poll_and_load()
 {
     const bool *keys = SDL_GetKeyboardState(NULL);
     for (int i = 0; i < NUM_BUTTONS; i++)
         buttons[i].pressed = keys[buttons[i].scancode];
+    load_joyp_nibble();
 }
 
-/* Get lower nibble of the joypad register according to the most recent
-input state.
-action = true - reads the action buttons (SsBA).
-direction = true - reads the D-pad. */
-uint8_t get_joyp_nibble(bool action, bool direction)
+static void load_joyp_nibble()
 {
-    uint8_t nibble = 0x0F;
-    if (action)
-        for (int i = 0; i < 4; i++)
-            nibble &= ~(buttons[i].pressed << (3 - i));
-    if (direction)
-        for (int i = 0; i < 4; i++)
-            nibble &= ~(buttons[i + 4].pressed << (3 - i));
-    return nibble;
+    /* Note: 0 = pressed, 1 = not pressed (active-low).
+    Selection bits are active-low too. */
+
+    bool action = !get_bit(joyp_reg, 5);
+    bool direction = !get_bit(joyp_reg, 4);
+
+    bool bit_0_pressed =
+        (buttons[A].pressed     && action) ||
+        (buttons[RIGHT].pressed && direction);
+    bool bit_1_pressed =
+        (buttons[B].pressed    && action) ||
+        (buttons[LEFT].pressed && direction);
+    bool bit_2_pressed =
+        (buttons[SELECT].pressed && action) ||
+        (buttons[UP].pressed     && direction);
+    bool bit_3_pressed =
+        (buttons[START].pressed && action) ||
+        (buttons[DOWN].pressed  && direction);
+
+    byte nibble = (
+        (!bit_0_pressed << 0) |
+        (!bit_1_pressed << 1) |
+        (!bit_2_pressed << 2) |
+        (!bit_3_pressed << 3));
+    joyp_reg = overlay_masked(joyp_reg, nibble, 0x0F);
 }
 
-/* TODO: Refactor joypad nibble handling in relation to mem.c functions (?) */
+byte input_joyp_read() {
+    return joyp_reg;
+}
+void input_joyp_write(byte val) {
+    joyp_reg = overlay_masked(joyp_reg, val, JOYP_RW_MASK);
+    load_joyp_nibble();
+}
