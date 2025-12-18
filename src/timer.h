@@ -1,3 +1,4 @@
+#pragma once
 #include "byte.h"
 #include <stdbool.h>
 

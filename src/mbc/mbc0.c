@@ -2,6 +2,8 @@
 #include "cart.h"
 #include "bus.h"
 
+/* No MBC - Two ROM banks are directly mapped to memory. */
+
 byte mbc0_read(uint16_t addr) {
     region_type region = get_addr_region(addr);
     if (region == BANK0 || region == BANK1)

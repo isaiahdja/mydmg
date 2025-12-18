@@ -1,6 +1,8 @@
 #include "timer.h"
 #include "system.h"
+#include <stdint.h>
 
+/* Internal T-cycle counter. */
 static uint64_t system_counter;
 
 #define DIV_RW_MASK  0x00
@@ -11,12 +13,17 @@ static uint64_t system_counter;
 static byte div_reg;
 static byte tima_reg, tma_reg, tac_reg;
 
-bit tac_enable;
-unsigned int tac_counter_bit_idx;
+/* Caches bit 2 of TAC. */
+static bit tac_enable;
+/* Effectively caches bits 1 through 0 of TAC by storing the corresponding bit
+   of the system counter to check. */
+static unsigned int tac_counter_bit_idx;
 
-bit prev_timer_signal = 0;
-bool timer_overflowed = false;
-byte tma_overflow_save;
+/* Used for falling-edge detection. */
+static bit prev_timer_signal = 0;
+/* Used to delay overflow logic to the next M-cycle. */
+static bool timer_overflowed = false;
+static byte tma_overflow_save;
 
 static void update_tac_caches();
 
@@ -57,13 +64,13 @@ void timer_tick(void)
 
 static void update_tac_caches()
 {
-    /* 0 = disabled, 1 = enabled (active-high).*/
+    /* For the enable bit, 0 = disabled, 1 = enabled. */
     tac_enable = get_bit(tac_reg, 2) == 1;
     switch (get_bits(tac_reg, 1, 0)) {
-        case 0x0: tac_counter_bit_idx = 9; break;
-        case 0x1: tac_counter_bit_idx = 3; break;
-        case 0x2: tac_counter_bit_idx = 5; break;
-        case 0x3: tac_counter_bit_idx = 7; break;
+        case 0x0: tac_counter_bit_idx = 9; break; /* 2^12 Hz | 256 M-cycles */
+        case 0x1: tac_counter_bit_idx = 3; break; /* 2^18 Hz |   4 M-cycles */
+        case 0x2: tac_counter_bit_idx = 5; break; /* 2^16 Hz |  16 M-cycles */
+        case 0x3: tac_counter_bit_idx = 7; break; /* 2^14 Hz |  64 M-cycles */
     }
 }
 
@@ -71,6 +78,7 @@ byte timer_div_read() {
     return div_reg;
 }
 void timer_div_write(byte val) {
+    /* Writing any value resets the system counter. */
     system_counter = 0;
 }
 

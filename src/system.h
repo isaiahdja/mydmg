@@ -1,4 +1,6 @@
+#pragma once
 #include "byte.h"
+#include <stdint.h>
 #include <stdbool.h>
 
 #define GB_WIDTH 160

@@ -19,9 +19,7 @@ static void run_frame(void);
 
 int main(int argc, char *argv[])
 {
-    bool sdl_initialized = false;
-
-    sdl_initialized = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    bool sdl_initialized = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     if (!sdl_initialized)
         goto failure;
 
@@ -63,6 +61,7 @@ failure:
 
 static void loop()
 {
+    /* Main loop. */
     Uint64 counter_freq = SDL_GetPerformanceFrequency();
     while (running) {
         Uint64 start = SDL_GetPerformanceCounter();

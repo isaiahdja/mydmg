@@ -1,3 +1,4 @@
+#pragma once
 #include "byte.h"
 
 void input_poll_and_load(void);

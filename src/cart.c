@@ -22,10 +22,12 @@ bool cart_init(const char *rom_path)
         return false;
     }
 
+    /* Read title from cartridge header. */
     char title[17] = {0};
     strncpy((char *)&title, cart_rom + 0x134, 16);
     SDL_Log("Opened %s", title);
     
+    /* Read MBC from cartridge header. */
     type = cart_rom[0x147];
     
     return true;
@@ -36,6 +38,7 @@ void cart_deinit()
     SDL_free(cart_rom);
 }
 
+/* Route read to the current MBC. */
 byte cart_read(uint16_t addr)
 {
     switch (type) {
@@ -43,6 +46,7 @@ byte cart_read(uint16_t addr)
     }
 }
 
+/* Route write to the current MBC. */
 void cart_write(uint16_t addr, byte val)
 {
     switch (type) {

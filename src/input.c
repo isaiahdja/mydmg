@@ -1,6 +1,7 @@
 #include "input.h"
 #include "bus.h"
 #include <SDL3/SDL.h>
+#include <stdbool.h>
 
 #define JOYP_RW_MASK 0x30
 
@@ -50,8 +51,8 @@ void input_poll_and_load()
 
 static void load_joyp_nibble()
 {
-    /* Note: 0 = pressed, 1 = not pressed (active-low).
-    Selection bits are active-low too. */
+    /* For the button bits, 0 = pressed, 1 = not pressed (active-low).
+       For the selection bits, 0 = selected, 1 = unselected. */
 
     bool action = !get_bit(joyp_reg, 5);
     bool direction = !get_bit(joyp_reg, 4);

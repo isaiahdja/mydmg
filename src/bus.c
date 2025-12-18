@@ -7,14 +7,18 @@
 #include "interrupt.h"
 #include "input.h"
 
+/* Memory bus - 16-bit address bus, 8-bit data bus. */
+
 static byte io_read(uint16_t addr);
 static void io_write(uint16_t addr, byte val);
 static inline uint16_t map_echo_to_wram(uint16_t addr);
 
+/* For the CPU - (Attempt to) read memory at addr. */
 byte bus_read_cpu(uint16_t addr)
 {
     region_type region = get_addr_region(addr);
 
+    /* HRAM is always accessible. */
     if (region == HRAM)
         return hram_read(addr);
 
@@ -47,10 +51,12 @@ byte bus_read_cpu(uint16_t addr)
     return 0xFF;
 }
 
+/* For the CPU - (Attempt to) write val to addr in memory. */
 void bus_write_cpu(uint16_t addr, byte val)
 {
     region_type region = get_addr_region(addr);
 
+    /* HRAM is always accessible. */
     if (region == HRAM) {
         hram_write(addr, val);
         return;
@@ -68,6 +74,7 @@ void bus_write_cpu(uint16_t addr, byte val)
             cart_write(addr, val);
             break;
         case VRAM:
+            /* The CPU cannot access VRAM during mode 3. */
             if (mode == MODE3_DRAW)
                 return;
             vram_write(addr, val);
@@ -78,6 +85,7 @@ void bus_write_cpu(uint16_t addr, byte val)
             wram_write(addr, val);
             break;
         case OAM:
+            /* The CPU cannot access OAM during mode 2 nor mode 3. */
             if (mode == MODE2_OAM || mode == MODE3_DRAW)
                 return;
             oam_write(addr, val);
@@ -88,6 +96,8 @@ void bus_write_cpu(uint16_t addr, byte val)
     }
 }
 
+/* For PPU - Read memory at addr. 
+   Only VRAM and OAM can be read. */
 byte bus_read_ppu(uint16_t addr)
 {
     region_type region = get_addr_region(addr);
@@ -177,6 +187,7 @@ static void io_write(uint16_t addr, byte val)
     }
 }
 
+/* Echo region maps to WRAM. */
 static inline uint16_t map_echo_to_wram(uint16_t addr) {
     return overlay_masked(addr, 0xC000, 0xE000);
 }
