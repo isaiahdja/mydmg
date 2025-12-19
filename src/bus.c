@@ -6,6 +6,7 @@
 #include "ppu.h"
 #include "interrupt.h"
 #include "input.h"
+#include "dma.h"
 
 /* Memory bus - 16-bit address bus, 8-bit data bus. */
 
@@ -21,9 +22,8 @@ byte bus_read_cpu(uint16_t addr)
     /* HRAM is always accessible. */
     if (region == HRAM)
         return hram_read(addr);
-
-    /* TODO: Check OAM DMA transfer. */
-    if (false)
+    
+    if (dma_is_active())
         return 0xFF;
 
     ppu_mode mode = ppu_get_mode();
@@ -62,8 +62,7 @@ void bus_write_cpu(uint16_t addr, byte val)
         return;
     }
 
-    /* TODO: Check OAM DMA transfer. */
-    if (false)
+    if (dma_is_active())
         return;
 
     ppu_mode mode = ppu_get_mode();
@@ -104,9 +103,36 @@ byte bus_read_ppu(uint16_t addr)
     if (region == VRAM)
         return vram_read(addr);
     else if (region == OAM)
+        /* TODO: Check OAM DMA transfer (?)
+           PPU reading OAM during DMA transfer is just glitch behavior. */
         return oam_read(addr);
     
     return 0xFF;
+}
+
+void bus_copy_dma(uint16_t src, uint16_t dst)
+{
+    byte val;
+    region_type src_region = get_addr_region(src);
+
+    /* TODO: Expand accessible source regions (?) */
+    switch (src_region) {
+        case BANK0:
+        case BANK1:
+        case EXT_RAM:
+            val = cart_read(src);
+            break;
+        case VRAM:
+            val = vram_read(src);
+            break;
+        case WRAM:
+            val = wram_read(src);
+            break;
+        default:
+            val = 0xFF;
+    }
+
+    oam_write(dst, val);
 }
 
 region_type get_addr_region(uint16_t addr) {
@@ -149,7 +175,7 @@ static byte io_read(uint16_t addr)
         case STAT_REG: return ppu_stat_read();
         case SCY_REG:  return ppu_scy_read();
         case SCX_REG:  return ppu_scx_read();
-        case DMA_REG:  return ppu_dma_read();
+        case DMA_REG:  return dma_dma_read();
         case BGP_REG:  return ppu_bgp_read();
         case OBP0_REG: return ppu_obp0_read();
         case OBP1_REG: return ppu_obp1_read();
@@ -176,7 +202,7 @@ static void io_write(uint16_t addr, byte val)
         case STAT_REG: ppu_stat_write(val);     break;
         case SCY_REG:  ppu_scy_write(val);      break;
         case SCX_REG:  ppu_scx_write(val);      break;
-        case DMA_REG:  ppu_dma_write(val);      break;
+        case DMA_REG:  dma_dma_write(val);      break;
         case BGP_REG:  ppu_bgp_write(val);      break;
         case OBP0_REG: ppu_obp0_write(val);     break;
         case OBP1_REG: ppu_obp1_write(val);     break;

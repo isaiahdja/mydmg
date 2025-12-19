@@ -15,6 +15,9 @@ void ppu_tick(void);
 
 ppu_mode ppu_get_mode(void);
 
+byte vram_read(uint16_t addr);
+void vram_write(uint16_t addr, byte val);
+
 byte oam_read(uint16_t addr);
 void oam_write(uint16_t addr, byte val);
 
@@ -30,8 +33,6 @@ byte ppu_ly_read(void);
 void ppu_ly_write(byte val);
 byte ppu_lyc_read(void);
 void ppu_lyc_write(byte val);
-byte ppu_dma_read(void);
-void ppu_dma_write(byte val);
 byte ppu_bgp_read(void);
 void ppu_bgp_write(byte val);
 byte ppu_obp0_read(void);

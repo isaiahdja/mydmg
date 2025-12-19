@@ -4,6 +4,8 @@
 
 #include "mbc/mbc0.h"
 
+/* Cartridge. */
+
 typedef enum {
     ROM_ONLY = 0x00,
     /* ... */

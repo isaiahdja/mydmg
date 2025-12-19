@@ -64,4 +64,6 @@ void bus_write_cpu(uint16_t addr, byte val);
 
 byte bus_read_ppu(uint16_t addr);
 
+void bus_copy_dma(uint16_t src, uint16_t dst);
+
 region_type get_addr_region(uint16_t addr);

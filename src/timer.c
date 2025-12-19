@@ -1,13 +1,13 @@
 #include "timer.h"
 #include "system.h"
 #include <stdint.h>
+#include "interrupt.h"
+
+/* Divider and timer. */
 
 /* Internal T-cycle counter. */
 static uint64_t system_counter;
 
-#define DIV_RW_MASK  0x00
-#define TIMA_RW_MASK 0xFF
-#define TMA_RW_MASK  0xFF
 #define TAC_RW_MASK  0x07
 
 static byte div_reg;
@@ -45,13 +45,12 @@ void timer_tick(void)
     if (timer_overflowed) {
         timer_overflowed = false;
         tima_reg = tma_overflow_save;
-        /* TODO: Request timer interrupt here. */
+        request_interrupt(ITR_TIMER);
     }
 
     int next_timer_signal =
         get_bit(system_counter, tac_counter_bit_idx) & tac_enable;
-    if (next_timer_signal == 0 && prev_timer_signal == 1) {
-        /* Falling edge detected. */
+    if (detect_falling_edge(prev_timer_signal, next_timer_signal)) {
         if (++tima_reg == 0) {
             /* Timer overflow.
             We load the current value of TMA to TIMA on the *next* M-cycle. */
@@ -78,7 +77,6 @@ byte timer_div_read() {
     return div_reg;
 }
 void timer_div_write(byte val) {
-    /* Writing any value resets the system counter. */
     system_counter = 0;
 }
 
@@ -86,14 +84,14 @@ byte timer_tima_read() {
     return tima_reg;
 }
 void timer_tima_write(byte val) {
-    tima_reg = overlay_masked(tima_reg, val, TIMA_RW_MASK);
+    tima_reg = val;
 }
 
 byte timer_tma_read() {
     return tma_reg;
 }
 void timer_tma_write(byte val) {
-    tma_reg = overlay_masked(tma_reg, val, TMA_RW_MASK);
+    tma_reg = val;
 }
 
 byte timer_tac_read() {

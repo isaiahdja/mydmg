@@ -5,8 +5,9 @@
 #include "interrupt.h"
 #include "ppu.h"
 #include "input.h"
+#include "dma.h"
 
-static byte vram[VRAM_SIZE];
+/* Work RAM. */
 static byte wram[WRAM_SIZE];
 
 bool sys_init()
@@ -16,14 +17,16 @@ bool sys_init()
         timer_init() &&
         cpu_init() &&
         interrupt_init() &&
-        ppu_init()
+        ppu_init() &&
+        dma_init()
     );
 }
 
 void sys_tick()
 {
-    /* TODO: Place interrupt_tick() (?) */
     /* Order is significant. */
+    interrupt_tick();
+    dma_tick();
     cpu_tick();
     ppu_tick();
     timer_tick();
@@ -32,14 +35,6 @@ void sys_tick()
 void sys_start_frame()
 {
     input_poll_and_load();
-}
-
-byte vram_read(uint16_t addr) {
-    return vram[addr - VRAM_START];
-}
-
-void vram_write(uint16_t addr, byte val) {
-    vram[addr - VRAM_START] = val;
 }
 
 byte wram_read(uint16_t addr) {

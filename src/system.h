@@ -15,8 +15,5 @@ bool sys_init();
 void sys_tick(void);
 void sys_start_frame(void);
 
-byte vram_read(uint16_t addr);
-void vram_write(uint16_t addr, byte val);
-
 byte wram_read(uint16_t addr);
 void wram_write(uint16_t addr, byte val);

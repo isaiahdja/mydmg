@@ -2,6 +2,9 @@
 #include "bus.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
+#include "interrupt.h"
+
+/* P1 / JOYP input. */
 
 #define JOYP_RW_MASK 0x30
 
@@ -70,12 +73,17 @@ static void load_joyp_nibble()
         (buttons[START].pressed && action) ||
         (buttons[DOWN].pressed  && direction);
 
-    byte nibble = (
+    byte prev_nibble = joyp_reg & 0x0F;
+    byte next_nibble = (
         (!bit_0_pressed << 0) |
         (!bit_1_pressed << 1) |
         (!bit_2_pressed << 2) |
         (!bit_3_pressed << 3));
-    joyp_reg = overlay_masked(joyp_reg, nibble, 0x0F);
+
+    if (detect_falling_edge(prev_nibble, next_nibble))
+        request_interrupt(ITR_JOYPAD);
+
+    joyp_reg = overlay_masked(joyp_reg, next_nibble, 0x0F);
 }
 
 byte input_joyp_read() {
