@@ -4,6 +4,9 @@
 #include "system.h"
 #include "cart.h"
 
+#include <stdlib.h>
+#include <stdio.h>
+
 static double target_secs_per_frame
     = (double)T_CYCLES_PER_FRAME / (double)T_CYCLES_PER_SEC;
 
@@ -34,7 +37,7 @@ int main(int argc, char *argv[])
     window_height = GB_HEIGHT * scale_factor;
     /* TODO: SDL_CreateWindowAndRenderer (?) */
     window = SDL_CreateWindow(
-        "gbemu", window_width, window_height, 0);
+        "MyDMG", window_width, window_height, 0);
     if (window == NULL)
         goto failure;
 
@@ -42,7 +45,7 @@ int main(int argc, char *argv[])
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_DEBUG);
 #endif
 
-    if (!sys_init() || !cart_init(argv[1]))
+    if (!cart_init(argv[1]) || !sys_init())
         goto failure;
     loop();
 
@@ -77,7 +80,7 @@ static void loop()
         else
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
-
+        
         /* TODO: Scale and display frame. */
     }
 }

@@ -25,7 +25,6 @@ bool sys_init()
 void sys_tick()
 {
     /* Order is significant. */
-    interrupt_tick();
     dma_tick();
     cpu_tick();
     ppu_tick();

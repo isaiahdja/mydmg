@@ -45,7 +45,7 @@ void timer_tick(void)
     if (timer_overflowed) {
         timer_overflowed = false;
         tima_reg = tma_overflow_save;
-        request_interrupt(ITR_TIMER);
+        request_interrupt(INT_TIMER);
     }
 
     int next_timer_signal =
