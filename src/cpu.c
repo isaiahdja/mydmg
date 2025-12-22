@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include <stdio.h>
+
 /* Central Processing Unit core. */
 
 /* High RAM. */
@@ -47,6 +49,8 @@ bool cpu_init(void)
         0x0100,
         0
     };
+
+    fetch_and_decode();
 
     fetch_and_decode();
 

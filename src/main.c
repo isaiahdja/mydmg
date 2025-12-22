@@ -4,6 +4,9 @@
 #include "system.h"
 #include "cart.h"
 
+#include <stdlib.h>
+#include <stdio.h>
+
 static double target_secs_per_frame
     = (double)T_CYCLES_PER_FRAME / (double)T_CYCLES_PER_SEC;
 
