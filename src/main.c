@@ -34,15 +34,18 @@ int main(int argc, char *argv[])
     window_height = GB_HEIGHT * scale_factor;
     /* TODO: SDL_CreateWindowAndRenderer (?) */
     window = SDL_CreateWindow(
-        "gbemu", window_width, window_height, 0);
+        "MyDMG", window_width, window_height, 0);
     if (window == NULL)
         goto failure;
 
-#if DEBUG
+#ifdef DEBUG
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_DEBUG);
+    SDL_Log("Debug build");
 #endif
 
-    if (!sys_init() || !cart_init(argv[1]))
+    /* Initialize the cartridge before the system as the CPU initialization will
+       attempt to read the first instruction from the cartridge. */
+    if (!cart_init(argv[1]) || !sys_init())
         goto failure;
     loop();
 
@@ -77,7 +80,7 @@ static void loop()
         else
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
-
+        
         /* TODO: Scale and display frame. */
     }
 }

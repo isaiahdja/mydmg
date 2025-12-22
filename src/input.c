@@ -81,7 +81,7 @@ static void load_joyp_nibble()
         (!bit_3_pressed << 3));
 
     if (detect_falling_edge(prev_nibble, next_nibble))
-        request_interrupt(ITR_JOYPAD);
+        request_interrupt(INT_JOYPAD);
 
     joyp_reg = overlay_masked(joyp_reg, next_nibble, 0x0F);
 }

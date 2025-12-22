@@ -18,11 +18,11 @@ static byte if_reg, ie_reg;
 #define NUM_INTERRUPTS 5
 
 static uint16_t jump_vecs[NUM_INTERRUPTS] = {
-    [ITR_VBLANK] = JUMP_VEC_VBLANK,
-    [ITR_STAT]   = JUMP_VEC_STAT,
-    [ITR_TIMER]  = JUMP_VEC_TIMER,
-    [ITR_SERIAL] = JUMP_VEC_SERIAL,
-    [ITR_JOYPAD] = JUMP_VEC_JOYPAD
+    [INT_VBLANK] = JUMP_VEC_VBLANK,
+    [INT_STAT]   = JUMP_VEC_STAT,
+    [INT_TIMER]  = JUMP_VEC_TIMER,
+    [INT_SERIAL] = JUMP_VEC_SERIAL,
+    [INT_JOYPAD] = JUMP_VEC_JOYPAD
 };
 
 bool interrupt_init(void)
@@ -31,17 +31,6 @@ bool interrupt_init(void)
     if_reg = 0xE1, ie_reg = 0x00;
 
     return true;
-}
-
-void interrupt_tick()
-{
-    for (int i = 0; i < NUM_INTERRUPTS; i++) {
-        if ((get_bit(ie_reg, i) & get_bit(if_reg, i )) == 1) {
-            if_reg = set_bit(if_reg, i, 0);
-            cpu_receive_interrupt(jump_vecs[i]);
-            return;
-        }
-    }
 }
 
 byte interrupt_if_read() {
@@ -56,6 +45,18 @@ byte interrupt_ie_read() {
 }
 void interrupt_ie_write(byte val) {
     ie_reg = overlay_masked(ie_reg, val, IE_RW_MASK);
+}
+
+bool interrupt_send_interrupt(uint16_t *jump_vec)
+{
+    for (int i = 0; i < NUM_INTERRUPTS; i++) {
+        if ((get_bit(ie_reg, i) & get_bit(if_reg, i )) == 1) {
+            if_reg = set_bit(if_reg, i, 0);
+            *jump_vec = jump_vecs[i];
+            return true;
+        }
+    }
+    return false;
 }
 
 void request_interrupt(interrupt_type type) {

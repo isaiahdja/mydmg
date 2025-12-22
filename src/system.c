@@ -12,7 +12,7 @@ static byte wram[WRAM_SIZE];
 
 bool sys_init()
 {
-    /* Order is insignificant. */
+    /* TODO: Ordering (?) */
     return (
         timer_init() &&
         cpu_init() &&
@@ -25,7 +25,6 @@ bool sys_init()
 void sys_tick()
 {
     /* Order is significant. */
-    interrupt_tick();
     dma_tick();
     cpu_tick();
     ppu_tick();

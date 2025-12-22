@@ -1,41 +1,80 @@
 #include "cpu.h"
+#ifndef CPU_TEST
 #include "bus.h"
+#include "interrupt.h"
+#endif
+
+#include <stdio.h>
 
 /* Central Processing Unit core. */
 
 /* High RAM. */
+#ifndef CPU_TEST
 static byte hram[HRAM_SIZE];
+#endif
 
-static byte a_reg;
-bit z_flag, n_flag, h_flag, c_flag;
-static byte b_reg, c_reg;
-static byte d_reg, e_reg;
-static byte h_reg, l_reg;
-static uint16_t sp_reg;
-static uint16_t pc_reg;
-bit ime_flag;
+static cpu_state state;
+static byte z_latch, w_latch;
+static byte instr_reg;
 
+static void (*instr_func)(void);
+static int instr_cycle;
+static bool instr_complete;
+
+static void fetch_and_decode(void);
+
+static void nop(void);
+
+static read_fn memory_read;
+static write_fn memory_write;
+static receive_int_fn receive_int;
+
+#ifndef CPU_TEST
 bool cpu_init(void)
 {
+    memory_read = &bus_read_cpu;
+    memory_write = &bus_write_cpu;
+    receive_int = &interrupt_send_interrupt;
+
     /* DMG boot handoff state. */
-    a_reg = 0x01;
-    /* TODO: Check header checksum (?) */
-    z_flag = 1; n_flag = 0, h_flag = 0; c_flag = 0;
-    b_reg = 0x00; c_reg = 0x13;
-    d_reg = 0x00; e_reg = 0xD8;
-    h_reg = 0x01; l_reg = 0x4D;
-    sp_reg = 0xFFFE;
-    pc_reg = 0x0100;
-    ime_flag = 0;
+    state = (cpu_state){
+        0x01,
+        1, 0, 0, 0,
+        0x00, 0x13,
+        0x00, 0xD8,
+        0x01, 0x4D,
+        0xFFFE,
+        0x0100,
+        0
+    };
+
+    fetch_and_decode();
 
     return true;
 }
+#endif
 
 void cpu_tick(void)
 {
+    /* The current instruction function will set instr_completed to true if it
+       has completed, allowing the next instruction to be fetched. This models
+       the CPU fetch/execute overlap.
+       Note that the final cycle of an instruction must not use the memory bus,
+       as it is reserved for fetching. */
+    instr_func();
 
+    if (instr_complete) {
+        uint16_t jump_vec;
+        if (state.ime_flag == 1 && receive_int(&jump_vec)) {
+            /* TODO: Interrupt received. */
+        }
+        fetch_and_decode(); /* Resets instr_cycle and instr_complete. */
+    }
+    else
+        instr_cycle++;
 }
 
+#ifndef CPU_TEST
 byte hram_read(uint16_t addr) {
     return hram[addr - HRAM_START];
 }
@@ -43,12 +82,41 @@ byte hram_read(uint16_t addr) {
 void hram_write(uint16_t addr, byte val) {
     hram[addr - HRAM_START] = val;
 }
+#endif
 
-bit cpu_get_ime() {
-    return ime_flag;
+static void fetch_and_decode()
+{
+    instr_cycle = 0;
+    instr_complete = false;
+    instr_func = &nop;
+    
+    instr_reg = memory_read(state.pc_reg++);
+
+    if (instr_reg == 0x00) {
+        instr_func = &nop;
+        return;
+    }
 }
 
-void cpu_receive_interrupt(uint16_t jump_vec)
-{
+static void nop() {
+    instr_complete = true;
+}
 
+bool cpu_test_init(read_fn _read, write_fn _write, receive_int_fn _receive_int)
+{
+    memory_read = _read;
+    memory_write = _write;
+    receive_int = _receive_int;
+
+    instr_func = &nop;
+    instr_cycle = 0;
+    instr_complete = false;
+
+    return true;
+}
+cpu_state cpu_test_get_state() {
+    return state;
+}
+void cpu_test_set_state(cpu_state _state) {
+    state = _state;
 }

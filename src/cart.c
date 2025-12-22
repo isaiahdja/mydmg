@@ -46,6 +46,8 @@ byte cart_read(uint16_t addr)
     switch (type) {
         case ROM_ONLY: mbc0_read(addr); break;
     }
+    
+    return 0xFF;
 }
 
 /* Route write to the current MBC. */

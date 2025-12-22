@@ -8,8 +8,9 @@
 #include "input.h"
 #include "dma.h"
 
-/* Memory bus - 16-bit address bus, 8-bit data bus. */
+/* Memory bus -- 16-bit address bus, 8-bit data bus. */
 
+/* TODO: Refactor IO using array of register descriptors (?) */
 static byte io_read(uint16_t addr);
 static void io_write(uint16_t addr, byte val);
 static inline uint16_t map_echo_to_wram(uint16_t addr);
