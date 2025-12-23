@@ -52,7 +52,7 @@ lib.cpu_test_init(read_cb, write_cb, receive_interrupt_cb)
 
 passed = 0
 total = 0
-for path in glob.glob("test/sm83/v1/35.json"):
+for path in glob.glob("test/sm83/v1/*.json"):
     with open(path) as f:
         tests = json.load(f)
 
@@ -82,6 +82,10 @@ for path in glob.glob("test/sm83/v1/35.json"):
             lib.cpu_tick()
 
         final = test["final"]
+        # Account for our fetch/execute overlap.
+        final["pc"] += 1
+        if (final["pc"] == 65536):
+            final["pc"] = 0
         final_get = lib.cpu_test_get_state()
         checks = [
             ("a", final["a"], get_hi(final_get.af_reg)),
@@ -93,9 +97,7 @@ for path in glob.glob("test/sm83/v1/35.json"):
             ("h", final["h"], get_hi(final_get.hl_reg)),
             ("l", final["l"], get_lo(final_get.hl_reg)),
             ("sp", final["sp"], final_get.sp_reg),
-            # Account for fetch/execute overlap.
-            # TODO: Account for PC overflow (?)
-            ("pc", final["pc"] + 1, final_get.pc_reg),
+            ("pc", final["pc"], final_get.pc_reg),
             ("ime", final["ime"], final_get.ime_flag)
         ]
 

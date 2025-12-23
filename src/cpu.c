@@ -25,6 +25,7 @@ static read_fn memory_read;
 static write_fn memory_write;
 static receive_int_fn receive_int;
 
+static bool cb_prefixed = false;
 static void fetch_and_decode(void);
 
 static inline byte get_w_latch(void) {
@@ -76,6 +77,7 @@ static uint16_t get_r16stk(int code);
 static void set_r16stk(int code, uint16_t val);
 static byte read_r16mem(int code);
 static void write_r16mem(int code, byte val);
+static bool check_cond(int code);
 
 static byte add_byte_flags(byte num1, byte num2, bool route_carry,
     bit *z_flag_out, bit *n_flag_out, bit *h_flag_out, bit *c_flag_out);
@@ -94,6 +96,23 @@ static void inc_r8(void);
 static void inc_hlmem(void);
 static void dec_r8(void);
 static void dec_hlmem(void);
+static void ld_r8_imm8(void);
+static void ld_hlmem_imm8(void);
+static void rlca(void);
+static void rla(void);
+static void rrca(void);
+static void rra(void);
+static void daa(void);
+static void cpl(void);
+static void scf(void);
+static void ccf(void);
+static void jr_imm8(void);
+static void jr_cond_imm8(void);
+static void stop(void);
+static void halt(void);
+static void ld_hlmem_r8(void);
+static void ld_r8_hlmem(void);
+static void ld_r8_r8(void);
 
 #ifndef CPU_TEST
 bool cpu_init(void)
@@ -157,6 +176,16 @@ static void fetch_and_decode()
     
     instr_reg = memory_read(state.pc_reg++);
 
+    if (cb_prefixed) {
+        /* TODO: 0xCB prefix instructions. */
+#pragma region
+#pragma endregion
+    }
+    else if (instr_reg == 0xCB) {
+        cb_prefixed = true;
+        return;
+    }
+
     /* "Block 0." */
 #pragma region
     if (instr_reg == 0x00) {
@@ -210,6 +239,80 @@ static void fetch_and_decode()
             instr_func = &dec_hlmem;
         else
             instr_func = &dec_r8;
+        return;
+    }
+
+    if (b_7_6 == 0 && b_2_0 == 6) {
+        if (instr_reg == 0x36)
+            instr_func = &ld_hlmem_imm8;
+        else
+            instr_func = &ld_r8_imm8;
+        return;
+    }
+
+    if (instr_reg == 0x07) {
+        instr_func = &rlca;
+        return;
+    }
+    if (instr_reg == 0x0F) {
+        instr_func = &rrca;
+        return;
+    }
+    if (instr_reg == 0x17) {
+        instr_func = &rla;
+        return;
+    }
+    if (instr_reg == 0x1f) {
+        instr_func = &rra;
+        return;
+    }
+    if (instr_reg == 0x27) {
+        instr_func = &daa;
+        return;
+    }
+    if (instr_reg == 0x2F) {
+        instr_func = &cpl;
+        return;
+    }
+    if (instr_reg == 0x37) {
+        instr_func = &scf;
+        return;
+    }
+    if (instr_reg == 0x3f) {
+        instr_func = &ccf;
+        return;
+    }
+
+    int b_7_5 = get_bits(instr_reg, 7, 5);
+    if (instr_reg == 0x18) {
+        instr_func = &jr_imm8;
+        return;
+    }
+    if (b_7_5 == 1 && b_2_0 == 0) {
+        instr_func = &jr_cond_imm8;
+        return;
+    }
+
+    if (instr_reg == 0x10) {
+        instr_func = &stop;
+        return;
+    }
+#pragma endregion
+
+    /* "Block 1." "*/
+#pragma region
+    if (instr_reg == 0x76) {
+        instr_func = &halt;
+        return;
+    }
+    int b_5_3 = get_bits(instr_reg, 5, 3);
+    if (b_7_6 == 1) {
+        if (b_5_3 == 6)
+            instr_func = &ld_hlmem_r8;
+        else if (b_2_0 == 6)
+            instr_func = &ld_r8_hlmem;
+        else
+            instr_func = &ld_r8_r8;
         return;
     }
 #pragma endregion
@@ -277,6 +380,15 @@ static void write_r16mem(int code, byte val)
         case 1: memory_write(state.de_reg, val);   break;
         case 2: memory_write(state.hl_reg++, val); break;
         case 3: memory_write(state.hl_reg--, val); break;
+    }
+}
+static bool check_cond(int code)
+{
+    switch (code) {
+        case 0: return !get_zero();
+        case 1: return get_zero();
+        case 2: return !get_carry();
+        case 3: return get_carry();
     }
 }
 
@@ -354,7 +466,7 @@ static void ld_r16mem_a()
 {
     switch (instr_cycle) {
         case 0:
-            write_r16mem(get_bits(instr_reg, 5, 4), get_r8(7));
+            write_r16mem(get_bits(instr_reg, 5, 4), get_hi_byte(state.af_reg));
             break;
         case 1:
             instr_complete = true;
@@ -368,7 +480,7 @@ static void ld_a_r16mem()
             set_z_latch(read_r16mem(get_bits(instr_reg, 5, 4)));
             break;
         case 1:
-            set_r8(7, get_z_latch());
+            state.af_reg = set_hi_byte(state.af_reg, get_z_latch());
             instr_complete = true;
             break;
     }
@@ -441,7 +553,7 @@ static void add_hl_r16()
             break;
     }
 }
-static void inc_r8(void)
+static void inc_r8()
 {
     int code = get_bits(instr_reg, 5, 3);
     bit z_flag, n_flag, h_flag;
@@ -453,7 +565,7 @@ static void inc_r8(void)
     set_half_carry(h_flag);
     instr_complete = true;
 }
-static void inc_hlmem(void)
+static void inc_hlmem()
 {
     switch (instr_cycle) {
         case 0:
@@ -473,7 +585,7 @@ static void inc_hlmem(void)
             break;
     }
 }
-static void dec_r8(void)
+static void dec_r8()
 {
     int code = get_bits(instr_reg, 5, 3);
     bit z_flag, n_flag, h_flag;
@@ -485,7 +597,7 @@ static void dec_r8(void)
     set_half_carry(h_flag);
     instr_complete = true;
 }
-static void dec_hlmem(void)
+static void dec_hlmem()
 {
     switch (instr_cycle) {
         case 0:
@@ -504,6 +616,194 @@ static void dec_hlmem(void)
             instr_complete = true;
             break;
     }
+}
+static void ld_r8_imm8()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.pc_reg++));
+            break;
+        case 1:
+            set_r8(get_bits(instr_reg, 5, 3), get_z_latch());
+            instr_complete = true;
+            break;
+    }
+}
+static void ld_hlmem_imm8()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.pc_reg++));
+            break;
+        case 1:
+            memory_write(state.hl_reg, get_z_latch());
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void rlca()
+{
+    byte a_reg = get_hi_byte(state.af_reg);
+    bit b7 = get_bit(a_reg, 7);
+    state.af_reg = set_hi_byte(state.af_reg, (a_reg << 1) | b7);
+    set_zero(0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b7);
+    instr_complete = true;
+}
+static void rla()
+{
+    byte a_reg = get_hi_byte(state.af_reg);
+    bit b7 = get_bit(a_reg, 7);
+    state.af_reg = set_hi_byte(state.af_reg, (a_reg << 1) | get_carry());
+    set_zero(0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b7);
+    instr_complete = true;
+}
+static void rrca()
+{
+    byte a_reg = get_hi_byte(state.af_reg);
+    bit b0 = get_bit(a_reg, 0);
+    state.af_reg = set_hi_byte(state.af_reg, (a_reg >> 1) | (b0 << 7));
+    set_zero(0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void rra()
+{
+    byte a_reg = get_hi_byte(state.af_reg);
+    bit b0 = get_bit(a_reg, 0);
+    state.af_reg = set_hi_byte(state.af_reg, (a_reg >> 1) | (get_carry() << 7));
+    set_zero(0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void daa()
+{
+    /* https://blog.ollien.com/posts/gb-daa/.*/
+    byte a_reg = get_hi_byte(state.af_reg);
+    bit subtraction = get_subtraction();
+    bit half_carry = get_half_carry();
+    bit carry = get_carry();
+    byte offset = 0x00;
+    if ((subtraction == 0 && get_lo_nibble(a_reg) > 0x9) || half_carry == 1) {
+        offset |= 0x06;
+    }
+    if ((subtraction == 0 && a_reg > 0x99) || carry == 1) {
+        offset |= 0x60;
+        set_carry(1);
+    }
+    
+    if (subtraction == 0)
+        a_reg += offset;
+    else
+        a_reg -= offset;
+
+    set_half_carry(0);
+    set_zero(a_reg == 0x00 ? 1 : 0);
+    state.af_reg = set_hi_byte(state.af_reg, a_reg);
+    instr_complete = true;
+}
+static void cpl()
+{
+    byte a_reg = get_hi_byte(state.af_reg);
+    state.af_reg = set_hi_byte(state.af_reg, ~a_reg);
+    set_subtraction(1);
+    set_half_carry(1);
+    instr_complete = true;
+}
+static void scf()
+{
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(1);
+    instr_complete = true;
+}
+static void ccf()
+{
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(!get_carry());
+    instr_complete = true;
+}
+static void jr_imm8()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.pc_reg++));
+            break;
+        case 1:
+            wz_latch = state.pc_reg + (int8_t)get_z_latch();
+            break;
+        case 2:
+            state.pc_reg = wz_latch;
+            instr_complete = true;
+            break;
+    }
+}
+static void jr_cond_imm8()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.pc_reg++));
+            break;
+        case 1:
+            if (check_cond(get_bits(instr_reg, 4, 3))) {
+                wz_latch = state.pc_reg + (int8_t)get_z_latch();
+            }
+            else
+                instr_complete = true;
+            break;
+        case 2:
+            state.pc_reg = wz_latch;
+            instr_complete = true;
+            break;
+    }
+}
+static void stop()
+{
+    /* TODO: STOP instruction. */
+}
+static void halt()
+{
+    /* TODO: HALT instruction. */
+}
+static void ld_hlmem_r8()
+{
+    switch (instr_cycle) {
+        case 0:
+            memory_write(state.hl_reg, get_r8(get_bits(instr_reg, 2, 0)));
+            break;
+        case 1:
+            instr_complete = true;
+            break;
+    }
+}
+static void ld_r8_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            set_r8(get_bits(instr_reg, 5, 3), get_z_latch());
+            instr_complete = true;
+            break;
+    }
+}
+static void ld_r8_r8()
+{
+    set_r8(get_bits(instr_reg, 5, 3), get_r8(get_bits(instr_reg, 2, 0)));
+    instr_complete = true;
 }
 
 bool cpu_test_init(read_fn _read, write_fn _write, receive_int_fn _receive_int)
