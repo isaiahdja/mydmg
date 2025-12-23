@@ -46,9 +46,7 @@ int main(int argc, char *argv[])
     SDL_Log("Debug build");
 #endif
 
-    /* Initialize the cartridge before the system as the CPU initialization will
-       attempt to read the first instruction from the cartridge. */
-    if (!cart_init(argv[1]) || !sys_init())
+    if (!sys_init() || !cart_init(argv[1]))
         goto failure;
     loop();
 

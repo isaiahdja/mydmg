@@ -2,19 +2,21 @@ import ctypes
 import json
 import glob
 
+def make_u16(hi, lo):
+    return (hi << 8) | lo
+
+def get_lo(u16):
+    return u16 & 0xFF
+
+def get_hi(u16):
+    return (u16 >> 8) & 0xFF
+
 class CPUState (ctypes.Structure):
     _fields_ = [
-        ("a_reg", ctypes.c_uint8),
-        ("z_flag", ctypes.c_bool),
-        ("n_flag", ctypes.c_bool),
-        ("h_flag", ctypes.c_bool),
-        ("c_flag", ctypes.c_bool),
-        ("b_reg", ctypes.c_uint8),
-        ("c_reg", ctypes.c_uint8),
-        ("d_reg", ctypes.c_uint8),
-        ("e_reg", ctypes.c_uint8),
-        ("h_reg", ctypes.c_uint8),
-        ("l_reg", ctypes.c_uint8),
+        ("af_reg", ctypes.c_uint16),
+        ("bc_reg", ctypes.c_uint16),
+        ("de_reg", ctypes.c_uint16),
+        ("hl_reg", ctypes.c_uint16),
         ("sp_reg", ctypes.c_uint16),
         ("pc_reg", ctypes.c_uint16),
 
@@ -50,7 +52,7 @@ lib.cpu_test_init(read_cb, write_cb, receive_interrupt_cb)
 
 passed = 0
 total = 0
-for path in glob.glob("test/sm83/v1/00.json"):
+for path in glob.glob("test/sm83/v1/35.json"):
     with open(path) as f:
         tests = json.load(f)
 
@@ -64,34 +66,37 @@ for path in glob.glob("test/sm83/v1/00.json"):
         for addr, val in init["ram"]:
             py_write(addr, val)
 
-        init_state = CPUState(
-            init["a"],
-            0, 0, 0, 0,
-            init["b"], init["c"],
-            init["d"], init["e"],
-            init["h"], init["l"],
+        init_set = CPUState(
+            make_u16(init["a"], init["f"]),
+            make_u16(init["b"], init["c"]),
+            make_u16(init["d"], init["e"]),
+            make_u16(init["h"], init["l"]),
             init["sp"],
             init["pc"],
+
             init["ime"]
         )
-        lib.cpu_test_set_state(init_state)
+        lib.cpu_test_set_state(init_set)
         
         for _ in test["cycles"]:
             lib.cpu_tick()
 
         final = test["final"]
-        final_observed_state = lib.cpu_test_get_state()
+        final_get = lib.cpu_test_get_state()
         checks = [
-            ("a", final["a"], final_observed_state.a_reg),
-            ("b", final["b"], final_observed_state.b_reg),
-            ("c", final["c"], final_observed_state.c_reg),
-            ("d", final["d"], final_observed_state.d_reg),
-            ("e", final["e"], final_observed_state.e_reg),
-            ("h", final["h"], final_observed_state.h_reg),
-            ("l", final["l"], final_observed_state.l_reg),
-            ("sp", final["sp"], final_observed_state.sp_reg),
-            ("pc", final["pc"], final_observed_state.pc_reg),
-            ("ime", final["ime"], final_observed_state.ime_flag)
+            ("a", final["a"], get_hi(final_get.af_reg)),
+            ("f", final["f"], get_lo(final_get.af_reg)),
+            ("b", final["b"], get_hi(final_get.bc_reg)),
+            ("c", final["c"], get_lo(final_get.bc_reg)),
+            ("d", final["d"], get_hi(final_get.de_reg)),
+            ("e", final["e"], get_lo(final_get.de_reg)),
+            ("h", final["h"], get_hi(final_get.hl_reg)),
+            ("l", final["l"], get_lo(final_get.hl_reg)),
+            ("sp", final["sp"], final_get.sp_reg),
+            # Account for fetch/execute overlap.
+            # TODO: Account for PC overflow (?)
+            ("pc", final["pc"] + 1, final_get.pc_reg),
+            ("ime", final["ime"], final_get.ime_flag)
         ]
 
         for addr, val in final["ram"]:

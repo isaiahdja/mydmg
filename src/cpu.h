@@ -4,11 +4,10 @@
 #include <stdbool.h>
 
 typedef struct {
-    byte a_reg;
-    bit z_flag, n_flag, h_flag, c_flag;
-    byte b_reg, c_reg;
-    byte d_reg, e_reg;
-    byte h_reg, l_reg;
+    uint16_t af_reg;
+    uint16_t bc_reg;
+    uint16_t de_reg;
+    uint16_t hl_reg;
     uint16_t sp_reg;
     uint16_t pc_reg;
 
