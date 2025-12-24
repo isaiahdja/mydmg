@@ -8,6 +8,8 @@
 #include "input.h"
 #include "dma.h"
 
+#include <stdio.h>
+
 /* Memory bus -- 16-bit address bus, 8-bit data bus. */
 
 /* TODO: Refactor IO using array of register descriptors (?) */

@@ -44,9 +44,8 @@ void cart_deinit()
 byte cart_read(uint16_t addr)
 {
     switch (type) {
-        case ROM_ONLY: mbc0_read(addr); break;
+        case ROM_ONLY: return mbc0_read(addr);
     }
-    
     return 0xFF;
 }
 

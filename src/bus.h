@@ -2,16 +2,16 @@
 #include "byte.h"
 #include <stdint.h>
 
-#define BANK0_START  0x0000
-#define BANK0_SIZE          0x4000
-#define BANK1_START  0x4000
-#define BANK1_SIZE          0x4000
+#define BANK0_START   0x0000
+#define BANK0_SIZE           0x4000
+#define BANK1_START   0x4000
+#define BANK1_SIZE           0x4000
 #define VRAM_START    0x8000
 #define VRAM_SIZE            0x2000
 #define EXT_RAM_START 0xA000
 #define EXT_RAM_SIZE         0x2000
 #define WRAM_START    0xC000
-#define WRAM_SIZE            0x1000
+#define WRAM_SIZE            0x2000
 #define ECHO_START    0xE000
 #define ECHO_SIZE            0x1E00
 #define OAM_START     0xFE00

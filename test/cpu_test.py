@@ -52,7 +52,7 @@ lib.cpu_test_init(read_cb, write_cb, receive_interrupt_cb)
 
 passed = 0
 total = 0
-for path in glob.glob("test/sm83/v1/*.json"):
+for path in glob.glob("test/sm83/v1/??.json"):
     with open(path) as f:
         tests = json.load(f)
 
@@ -62,7 +62,6 @@ for path in glob.glob("test/sm83/v1/*.json"):
 
         init = test["initial"]
 
-        memory = MemoryArrayType()
         for addr, val in init["ram"]:
             py_write(addr, val)
 
@@ -110,7 +109,7 @@ for path in glob.glob("test/sm83/v1/*.json"):
                 if success:
                     print(f"{test_name}: FAILED")
                 success = False
-                print(f"\t{name}: Expected = {expected}; Actual = {actual}")
+                print(f"\t{name}: Expected = {bin(expected)}; Actual = {bin(actual)}")
         
         if success:
             passed += 1
