@@ -29,9 +29,12 @@ static receive_int_fn receive_int;
 static bool cb_prefixed = false;
 static bool cond;
 static int adj;
-static bool set_ime;
+static bool set_ime = false;
+static uint16_t jump_vec;
 
 static void fetch_and_decode(void);
+static void nop(void);
+static void call_int(void);
 
 static inline byte get_w_latch(void) {
     return get_hi_byte(wz_latch);
@@ -75,98 +78,6 @@ static inline void set_carry(bit val) {
     state.af_reg = set_bit(state.af_reg, 4, val);
 }
 
-uint8_t add_u8_u8(uint8_t num1, uint8_t num2, bit c_in,
-    bit *z_out, bit *n_out, bit *h_out, bit *c_out);
-uint8_t sub_u8_u8(uint8_t num1, uint8_t num2, bit b_in,
-    bit *z_out, bit *n_out, bit *h_out, bit *c_out);
-static int calc_adj(bit carry, bit sign);
-
-static byte get_r8(int code);
-static void set_r8(int code, byte val);
-static uint16_t get_r16(int code);
-static void set_r16(int code, uint16_t val);
-static uint16_t get_r16stk(int code);
-static void set_r16stk(int code, uint16_t val);
-static byte read_r16mem(int code);
-static void write_r16mem(int code, byte val);
-static void check_cond(int code);
-
-static void nop(void);
-static void ld_r16_imm16(void);
-static void ld_r16mem_a(void);
-static void ld_a_r16mem(void);
-static void ld_imm16_sp(void);
-static void inc_r16(void);
-static void dec_r16(void);
-static void add_hl_r16(void);
-static void inc_r8(void);
-static void inc_hlmem(void);
-static void dec_r8(void);
-static void dec_hlmem(void);
-static void ld_r8_imm8(void);
-static void ld_hlmem_imm8(void);
-static void rlca(void);
-static void rla(void);
-static void rrca(void);
-static void rra(void);
-static void daa(void);
-static void cpl(void);
-static void scf(void);
-static void ccf(void);
-static void jr_imm8(void);
-static void jr_cond_imm8(void);
-static void stop(void);
-static void halt(void);
-static void ld_hlmem_r8(void);
-static void ld_r8_hlmem(void);
-static void ld_r8_r8(void);
-static void add_a_r8(void);
-static void add_a_hlmem(void);
-static void adc_a_r8(void);
-static void adc_a_hlmem(void);
-static void sub_a_r8(void);
-static void sub_a_hlmem(void);
-static void sbc_a_r8(void);
-static void sbc_a_hlmem(void);
-static void and_a_r8(void);
-static void and_a_hlmem(void);
-static void xor_a_r8(void);
-static void xor_a_hlmem(void);
-static void or_a_r8(void);
-static void or_a_hlmem(void);
-static void cp_a_r8(void);
-static void cp_a_hlmem(void);
-static void add_a_imm8(void);
-static void adc_a_imm8(void);
-static void sub_a_imm8(void);
-static void sbc_a_imm8(void);
-static void and_a_imm8(void);
-static void xor_a_imm8(void);
-static void or_a_imm8(void);
-static void cp_a_imm8(void);
-static void ret_cond(void);
-static void ret(void);
-static void reti(void);
-static void jp_cond_imm16(void);
-static void jp_imm16(void);
-static void jp_hl(void);
-static void call_cond_imm16(void);
-static void call_imm16(void);
-static void rst_tgt3(void);
-static void pop_r16stk(void);
-static void push_r16stk(void);
-static void ldh_cmem_a(void);
-static void ldh_imm8mem_a(void);
-static void ld_imm16mem_a(void);
-static void ld_a_cmem(void);
-static void ldh_a_imm8mem(void);
-static void ld_a_imm16mem(void);
-static void add_sp_imm8(void);
-static void ld_hl_sp_imm8(void);
-static void ld_sp_hl(void);
-static void di(void);
-static void ei(void);
-
 #ifndef CPU_TEST
 bool cpu_init(void)
 {
@@ -192,12 +103,14 @@ bool cpu_init(void)
     return true;
 }
 #endif
+
 void cpu_tick(void)
 {
     if (set_ime) {
         state.ime_flag = 1;
         set_ime = false;
     }
+    
     /* The current instruction function will set instr_completed to true if it
        has completed, allowing the next instruction to be fetched. This models
        the CPU fetch/execute overlap.
@@ -206,12 +119,15 @@ void cpu_tick(void)
     instr_func();
 
     if (instr_complete) {
-        uint16_t jump_vec;
-        if (state.ime_flag == 1 && receive_int(&jump_vec)) {
-            /* TODO: Interrupt received. */
+        /* The fetch between a CB prefix and the opcode is non-interruptible. */
+        bool was_cb_prefixed = cb_prefixed;
+        /* fetch_and_decode() will reset instr_complete, instr_cycle, cb_prefixed... */
+        fetch_and_decode();
+
+        if (!was_cb_prefixed && state.ime_flag == 1 && receive_int(&jump_vec)) {
             state.ime_flag = 0;
+            instr_func = &call_int; /* Interrupt Service Routine. */
         }
-        fetch_and_decode(); /* Resets instr_cycle and instr_complete. */
     }
     else
         instr_cycle++;
@@ -225,346 +141,6 @@ void hram_write(uint16_t addr, byte val) {
     hram[addr - HRAM_START] = val;
 }
 #endif
-
-static void fetch_and_decode()
-{
-    instr_cycle = 0;
-    instr_complete = false;
-    instr_func = &nop;
-    
-    instr_reg = memory_read(state.pc_reg++);
-
-    if (cb_prefixed) {
-        /* TODO: 0xCB prefix instructions. */
-#pragma region
-#pragma endregion
-    }
-    else if (instr_reg == 0xCB) {
-        cb_prefixed = true;
-        return;
-    }
-
-    /* "Block 0." */
-#pragma region
-    if (instr_reg == 0x00) {
-        instr_func = &nop;
-        return;
-    }
-
-    int b_7_6 = get_bits(instr_reg, 7, 6);
-    int b_3_0 = get_bits(instr_reg, 3, 0);
-    if (b_7_6 == 0 && b_3_0 == 1) {
-        instr_func = &ld_r16_imm16;
-        return;
-    }
-    if (b_7_6 == 0 && b_3_0 == 0x2) {
-        instr_func = &ld_r16mem_a;
-        return;
-    }
-    if (b_7_6 == 0 && b_3_0 == 0xA) {
-        instr_func = &ld_a_r16mem;
-        return;
-    }
-    if (instr_reg == 0x08) {
-        instr_func = &ld_imm16_sp;
-        return;
-    }
-
-    if (b_7_6 == 0 && b_3_0 == 0x3) {
-        instr_func = &inc_r16;
-        return;
-    }
-    if (b_7_6 == 0 && b_3_0 == 0xB) {
-        instr_func = &dec_r16;
-        return;
-    }
-    if (b_7_6 == 0 && b_3_0 == 0x9) {
-        instr_func = &add_hl_r16;
-        return;
-    }
-
-
-    int b_2_0 = get_bits(instr_reg, 2, 0);
-    if (b_7_6 == 0 && b_2_0 == 4) {
-        if (instr_reg == 0x34)
-            instr_func = &inc_hlmem;
-        else
-            instr_func = &inc_r8;
-        return;
-    }
-    if (b_7_6 == 0 && b_2_0 == 5) {
-        if (instr_reg == 0x35)
-            instr_func = &dec_hlmem;
-        else
-            instr_func = &dec_r8;
-        return;
-    }
-
-    if (b_7_6 == 0 && b_2_0 == 6) {
-        if (instr_reg == 0x36)
-            instr_func = &ld_hlmem_imm8;
-        else
-            instr_func = &ld_r8_imm8;
-        return;
-    }
-
-    if (instr_reg == 0x07) {
-        instr_func = &rlca;
-        return;
-    }
-    if (instr_reg == 0x0F) {
-        instr_func = &rrca;
-        return;
-    }
-    if (instr_reg == 0x17) {
-        instr_func = &rla;
-        return;
-    }
-    if (instr_reg == 0x1f) {
-        instr_func = &rra;
-        return;
-    }
-    if (instr_reg == 0x27) {
-        instr_func = &daa;
-        return;
-    }
-    if (instr_reg == 0x2F) {
-        instr_func = &cpl;
-        return;
-    }
-    if (instr_reg == 0x37) {
-        instr_func = &scf;
-        return;
-    }
-    if (instr_reg == 0x3f) {
-        instr_func = &ccf;
-        return;
-    }
-
-    int b_7_5 = get_bits(instr_reg, 7, 5);
-    if (instr_reg == 0x18) {
-        instr_func = &jr_imm8;
-        return;
-    }
-    if (b_7_5 == 1 && b_2_0 == 0) {
-        instr_func = &jr_cond_imm8;
-        return;
-    }
-
-    if (instr_reg == 0x10) {
-        instr_func = &stop;
-        return;
-    }
-#pragma endregion
-
-    /* "Block 1." "*/
-#pragma region
-    if (instr_reg == 0x76) {
-        instr_func = &halt;
-        return;
-    }
-    int b_5_3 = get_bits(instr_reg, 5, 3);
-    if (b_7_6 == 1) {
-        if (b_5_3 == 6)
-            instr_func = &ld_hlmem_r8;
-        else if (b_2_0 == 6)
-            instr_func = &ld_r8_hlmem;
-        else
-            instr_func = &ld_r8_r8;
-        return;
-    }
-#pragma endregion
-    
-    /* "Block 2." */
-#pragma region
-    int b_7_3 = get_bits(instr_reg, 7, 3);
-    if (b_7_3 == 16) {
-        if (instr_reg == 0x86)
-            instr_func = &add_a_hlmem;
-        else
-            instr_func = &add_a_r8;
-        return;
-    }
-    if (b_7_3 == 17) {
-        if (instr_reg == 0x8E)
-            instr_func = &adc_a_hlmem;
-        else
-            instr_func = &adc_a_r8;
-        return;
-    }
-    if (b_7_3 == 18) {
-        if (instr_reg == 0x96)
-            instr_func = &sub_a_hlmem;
-        else
-            instr_func = &sub_a_r8;
-        return;
-    }
-    if (b_7_3 == 19) {
-        if (instr_reg == 0x9E)
-            instr_func = &sbc_a_hlmem;
-        else
-            instr_func = &sbc_a_r8;
-        return;
-    }
-    if (b_7_3 == 20) {
-        if (instr_reg == 0xA6)
-            instr_func = &and_a_hlmem;
-        else
-            instr_func = &and_a_r8;
-        return;
-    }
-    if (b_7_3 == 21) {
-        if (instr_reg == 0xAE)
-            instr_func = &xor_a_hlmem;
-        else
-            instr_func = &xor_a_r8;
-        return;
-    }
-    if (b_7_3 == 22) {
-        if (instr_reg == 0xB6)
-            instr_func = &or_a_hlmem;
-        else
-            instr_func = &or_a_r8;
-        return;
-    }
-    if (b_7_3 == 23) {
-        if (instr_reg == 0xBE)
-            instr_func = &cp_a_hlmem;
-        else
-            instr_func = &cp_a_r8;
-        return;
-    }
-#pragma endregion
-
-    /* "Block 3." */
-#pragma region
-    if (instr_reg == 0xC6) {
-        instr_func = &add_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xCE) {
-        instr_func = &adc_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xD6) {
-        instr_func = &sub_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xDE) {
-        instr_func = &sbc_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xE6) {
-        instr_func = &and_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xEE) {
-        instr_func = &xor_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xF6) {
-        instr_func = &or_a_imm8;
-        return;
-    }
-    if (instr_reg == 0xFE) {
-        instr_func = &cp_a_imm8;
-        return;
-    }
-
-    if (b_7_5 == 6 && b_2_0 == 0) {
-        instr_func = &ret_cond;
-        return;
-    }
-    if (instr_reg == 0xC9) {
-        instr_func = &ret;
-        return;
-    }
-    if (instr_reg == 0xD9) {
-        instr_func = &reti;
-        return;
-    }
-    if (b_7_5 == 6 && b_2_0 == 2) {
-        instr_func = &jp_cond_imm16;
-        return;
-    }
-    if (instr_reg == 0xC3) {
-        instr_func = &jp_imm16;
-        return;
-    }
-    if (instr_reg == 0xE9) {
-        instr_func = &jp_hl;
-        return;
-    }
-    if (b_7_5 == 6 && b_2_0 == 4) {
-        instr_func = &call_cond_imm16;
-        return;
-    }
-    if (instr_reg == 0xCD) {
-        instr_func = &call_imm16;
-        return;
-    }
-    if (b_7_6 == 3 && b_2_0 == 7) {
-        instr_func = &rst_tgt3;
-        return;
-    }
-
-    if (b_7_6 == 3 && b_3_0 == 1) {
-        instr_func = &pop_r16stk;
-        return;
-    }
-    if (b_7_6 == 3 && b_3_0 == 5) {
-        instr_func = &push_r16stk;
-        return;
-    }
-
-    if (instr_reg == 0xE2) {
-        instr_func = &ldh_cmem_a;
-        return;
-    }
-    if (instr_reg == 0xE0) {
-        instr_func = &ldh_imm8mem_a;
-        return;
-    }
-    if (instr_reg == 0xEA) {
-        instr_func = &ld_imm16mem_a;
-        return;
-    }
-    if (instr_reg == 0xF2) {
-        instr_func = &ld_a_cmem;
-        return;
-    }
-    if (instr_reg == 0xF0) {
-        instr_func = &ldh_a_imm8mem;
-        return;
-    }
-    if (instr_reg == 0xFA) {
-        instr_func = &ld_a_imm16mem;
-        return;
-    }
-
-    if (instr_reg == 0xE8) {
-        instr_func = &add_sp_imm8;
-        return;
-    }
-    if (instr_reg == 0xF8) {
-        instr_func = &ld_hl_sp_imm8;
-        return;
-    }
-    if (instr_reg == 0xF9) {
-        instr_func = &ld_sp_hl;
-        return;
-    }
-
-    if (instr_reg == 0xF3) {
-        instr_func = &di;
-        return;
-    }
-    if (instr_reg == 0xFB) {
-        instr_func = &ei;
-        return;
-    }
-#pragma endregion
-}
 
 static byte get_r8(int code)
 {
@@ -1013,8 +589,9 @@ static void jr_imm8()
             break;
         case 1:
             /* We could use add_u8_u8 and the corresponding adjustment here, but
-               it is not necessary as this operation is not split between cycles
-               and C will handle the two's complement with the cast. */
+               it is not necessary as this operation is not split between
+               cycles ("ALU and IDU magic").
+               C will handle the two's complement with the cast. */
             wz_latch = state.pc_reg + (int8_t)get_z_latch();
             break;
         case 2:
@@ -1582,7 +1159,6 @@ static void jp_imm16()
 }
 static void jp_hl()
 {
-    /* TODO: + 1 (?)*/
     state.pc_reg = state.hl_reg;
     instr_complete = true;
 }
@@ -1675,6 +1251,10 @@ static void push_r16stk()
 {
     switch (instr_cycle) {
         case 0:
+            /* "Because PUSH and POP use the IDU, and the IDU can only do
+            post-increment and post-decrement (so, no pre-increment or
+            pre-decrement), there is an extra delay cycle in PUSH for this
+            reason." */
             state.sp_reg--;
             break;
         case 1:
@@ -1849,6 +1429,791 @@ static void ei()
     set_ime = true;
     instr_complete = true;
 }
+static void rlc_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b7 = get_bit(reg, 7);
+    byte shift = (reg << 1) | b7;
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b7);
+    instr_complete = true;
+}
+static void rlc_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b7 = get_bit(reg, 7);
+            byte shift = (reg << 1) | b7;
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b7);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void rrc_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b0 = get_bit(reg, 0);
+    byte shift = (reg >> 1) | (b0 << 7);
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void rrc_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b0 = get_bit(reg, 0);
+            byte shift = (reg >> 1) | (b0 << 7);
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b0);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void rl_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b7 = get_bit(reg, 7);
+    byte shift = (reg << 1) | get_carry();
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b7);
+    instr_complete = true;
+}
+static void rl_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b7 = get_bit(reg, 7);
+            byte shift = (reg << 1) | get_carry();
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b7);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void rr_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b0 = get_bit(reg, 0);
+    byte shift = (reg >> 1) | (get_carry() << 7);
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void rr_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b0 = get_bit(reg, 0);
+            byte shift = (reg >> 1) | (get_carry() << 7);
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b0);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void sla_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b7 = get_bit(reg, 7);
+    byte shift = (reg << 1);
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b7);
+    instr_complete = true;
+}
+static void sla_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b7 = get_bit(reg, 7);
+            byte shift = (reg << 1);
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b7);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void sra_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b0 = get_bit(reg, 0);
+    byte b7_no_shift = reg & 0x80;
+    byte shift = (reg >> 1) | b7_no_shift;
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void sra_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b0 = get_bit(reg, 0);
+            byte b7_no_shift = reg & 0x80;
+            byte shift = (reg >> 1) | b7_no_shift;
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b0);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void swap_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    byte swap = (get_lo_nibble(reg) << 4) | (get_hi_nibble(reg));
+    set_r8(code, swap);
+    set_zero(swap == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(0);
+    instr_complete = true;
+}
+static void swap_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            int code = get_bits(instr_reg, 2, 0);
+            byte reg = get_z_latch();
+            byte swap = (get_lo_nibble(reg) << 4) | (get_hi_nibble(reg));
+            memory_write(state.hl_reg, swap);
+            set_zero(swap == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(0);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void srl_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    byte reg = get_r8(code);
+    bit b0 = get_bit(reg, 0);
+    byte shift = (reg >> 1);
+    set_r8(code, shift);
+    set_zero(shift == 0x00 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(0);
+    set_carry(b0);
+    instr_complete = true;
+}
+static void srl_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            byte reg = get_z_latch();
+            bit b0 = get_bit(reg, 0);
+            byte shift = (reg >> 1);
+            memory_write(state.hl_reg, shift);
+            set_zero(shift == 0x00 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(0);
+            set_carry(b0);
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void bit_b3_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    int idx = get_bits(instr_reg, 5, 3);
+    bit b = get_bit(get_r8(code), idx);
+    set_zero(b == 0 ? 1 : 0);
+    set_subtraction(0);
+    set_half_carry(1);
+    instr_complete = true;
+}
+static void bit_b3_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            int idx = get_bits(instr_reg, 5, 3);
+            bit b = get_bit(get_z_latch(), idx);
+            set_zero(b == 0 ? 1 : 0);
+            set_subtraction(0);
+            set_half_carry(1);
+            instr_complete = true;
+            break;
+    }
+}
+static void res_b3_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    int idx = get_bits(instr_reg, 5, 3);
+    set_r8(code, set_bit(get_r8(code), idx, 0));
+    instr_complete = true;
+}
+static void res_b3_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            int code = get_bits(instr_reg, 2, 0);
+            int idx = get_bits(instr_reg, 5, 3);
+            memory_write(state.hl_reg, set_bit(get_z_latch(), idx, 0));
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void set_b3_r8()
+{
+    int code = get_bits(instr_reg, 2, 0);
+    int idx = get_bits(instr_reg, 5, 3);
+    set_r8(code, set_bit(get_r8(code), idx, 1));
+    instr_complete = true;
+}
+static void set_b3_hlmem()
+{
+    switch (instr_cycle) {
+        case 0:
+            set_z_latch(memory_read(state.hl_reg));
+            break;
+        case 1:
+            int code = get_bits(instr_reg, 2, 0);
+            int idx = get_bits(instr_reg, 5, 3);
+            memory_write(state.hl_reg, set_bit(get_z_latch(), idx, 1));
+            break;
+        case 2:
+            instr_complete = true;
+            break;
+    }
+}
+static void call_int()
+{
+    /* Interrupt Service Routine. */
+    switch (instr_cycle) {
+        case 0:
+            state.pc_reg--;
+            break;
+        case 1:
+            state.sp_reg--;
+            break;
+        case 2:
+            memory_write(state.sp_reg--, get_hi_byte(state.pc_reg));
+            break;
+        case 3:
+            memory_write(state.sp_reg, get_lo_byte(state.pc_reg));
+            state.pc_reg = jump_vec;
+            break;
+        case 4:
+            instr_complete = true;
+            break;
+    }
+}
+
+static void fetch_and_decode()
+{   
+    instr_complete = false;
+    instr_func = &nop;
+    instr_cycle = 0;
+
+    instr_reg = memory_read(state.pc_reg++);
+
+    int b_7_6 = get_bits(instr_reg, 7, 6);
+    int b_2_0 = get_bits(instr_reg, 2, 0);
+    if (cb_prefixed) {
+#pragma region
+        cb_prefixed = false;
+        int b_7_3 = get_bits(instr_reg, 7, 3);
+        if (b_7_3 == 0) {
+            if (instr_reg == 0x06)
+                instr_func = &rlc_hlmem;
+            else
+                instr_func = &rlc_r8;
+            return;
+        }
+        if (b_7_3 == 1) {
+            if (instr_reg == 0x0E)
+                instr_func = &rrc_hlmem;
+            else
+                instr_func = &rrc_r8;
+            return;
+        }
+        if (b_7_3 == 2) {
+            if (instr_reg == 0x16)
+                instr_func = &rl_hlmem;
+            else
+                instr_func = &rl_r8;
+            return;
+        }
+        if (b_7_3 == 3) {
+            if (instr_reg == 0x1E)
+                instr_func = &rr_hlmem;
+            else
+                instr_func = &rr_r8;
+            return;
+        }
+        if (b_7_3 == 4) {
+            if (instr_reg == 0x26)
+                instr_func = &sla_hlmem;
+            else
+                instr_func = &sla_r8;
+            return;
+        }
+        if (b_7_3 == 5) {
+            if (instr_reg == 0x2E)
+                instr_func = &sra_hlmem;
+            else
+                instr_func = &sra_r8;
+            return;
+        }
+        if (b_7_3 == 6) {
+            if (instr_reg == 0x36)
+                instr_func = &swap_hlmem;
+            else
+                instr_func = &swap_r8;
+            return;
+        }
+        if (b_7_3 == 7) {
+            if (instr_reg == 0x3E)
+                instr_func = &srl_hlmem;
+            else
+                instr_func = &srl_r8;
+            return;
+        }
+
+        if (b_7_6 == 1) {
+            if (b_2_0 == 6)
+                instr_func = &bit_b3_hlmem;
+            else
+                instr_func = &bit_b3_r8;
+            return;
+        }
+        if (b_7_6 == 2) {
+            if (b_2_0 == 6)
+                instr_func = &res_b3_hlmem;
+            else
+                instr_func = &res_b3_r8;
+            return;
+        }
+        if (b_7_6 == 3) {
+            if (b_2_0 == 6)
+                instr_func = &set_b3_hlmem;
+            else
+                instr_func = &set_b3_r8;
+            return;
+        }
+#pragma endregion
+    }
+    else if (instr_reg == 0xCB) {
+        cb_prefixed = true; /* NOP. */
+        return;
+    }
+
+    /* "Block 0." */
+#pragma region
+    if (instr_reg == 0x00) {
+        instr_func = &nop;
+        return;
+    }
+
+    int b_3_0 = get_bits(instr_reg, 3, 0);
+    if (b_7_6 == 0 && b_3_0 == 1) {
+        instr_func = &ld_r16_imm16;
+        return;
+    }
+    if (b_7_6 == 0 && b_3_0 == 0x2) {
+        instr_func = &ld_r16mem_a;
+        return;
+    }
+    if (b_7_6 == 0 && b_3_0 == 0xA) {
+        instr_func = &ld_a_r16mem;
+        return;
+    }
+    if (instr_reg == 0x08) {
+        instr_func = &ld_imm16_sp;
+        return;
+    }
+
+    if (b_7_6 == 0 && b_3_0 == 0x3) {
+        instr_func = &inc_r16;
+        return;
+    }
+    if (b_7_6 == 0 && b_3_0 == 0xB) {
+        instr_func = &dec_r16;
+        return;
+    }
+    if (b_7_6 == 0 && b_3_0 == 0x9) {
+        instr_func = &add_hl_r16;
+        return;
+    }
+
+    if (b_7_6 == 0 && b_2_0 == 4) {
+        if (instr_reg == 0x34)
+            instr_func = &inc_hlmem;
+        else
+            instr_func = &inc_r8;
+        return;
+    }
+    if (b_7_6 == 0 && b_2_0 == 5) {
+        if (instr_reg == 0x35)
+            instr_func = &dec_hlmem;
+        else
+            instr_func = &dec_r8;
+        return;
+    }
+
+    if (b_7_6 == 0 && b_2_0 == 6) {
+        if (instr_reg == 0x36)
+            instr_func = &ld_hlmem_imm8;
+        else
+            instr_func = &ld_r8_imm8;
+        return;
+    }
+
+    if (instr_reg == 0x07) {
+        instr_func = &rlca;
+        return;
+    }
+    if (instr_reg == 0x0F) {
+        instr_func = &rrca;
+        return;
+    }
+    if (instr_reg == 0x17) {
+        instr_func = &rla;
+        return;
+    }
+    if (instr_reg == 0x1f) {
+        instr_func = &rra;
+        return;
+    }
+    if (instr_reg == 0x27) {
+        instr_func = &daa;
+        return;
+    }
+    if (instr_reg == 0x2F) {
+        instr_func = &cpl;
+        return;
+    }
+    if (instr_reg == 0x37) {
+        instr_func = &scf;
+        return;
+    }
+    if (instr_reg == 0x3f) {
+        instr_func = &ccf;
+        return;
+    }
+
+    int b_7_5 = get_bits(instr_reg, 7, 5);
+    if (instr_reg == 0x18) {
+        instr_func = &jr_imm8;
+        return;
+    }
+    if (b_7_5 == 1 && b_2_0 == 0) {
+        instr_func = &jr_cond_imm8;
+        return;
+    }
+
+    if (instr_reg == 0x10) {
+        instr_func = &stop;
+        return;
+    }
+#pragma endregion
+
+    /* "Block 1." "*/
+#pragma region
+    if (instr_reg == 0x76) {
+        instr_func = &halt;
+        return;
+    }
+    int b_5_3 = get_bits(instr_reg, 5, 3);
+    if (b_7_6 == 1) {
+        if (b_5_3 == 6)
+            instr_func = &ld_hlmem_r8;
+        else if (b_2_0 == 6)
+            instr_func = &ld_r8_hlmem;
+        else
+            instr_func = &ld_r8_r8;
+        return;
+    }
+#pragma endregion
+    
+    /* "Block 2." */
+#pragma region
+    int b_7_3 = get_bits(instr_reg, 7, 3);
+    if (b_7_3 == 16) {
+        if (instr_reg == 0x86)
+            instr_func = &add_a_hlmem;
+        else
+            instr_func = &add_a_r8;
+        return;
+    }
+    if (b_7_3 == 17) {
+        if (instr_reg == 0x8E)
+            instr_func = &adc_a_hlmem;
+        else
+            instr_func = &adc_a_r8;
+        return;
+    }
+    if (b_7_3 == 18) {
+        if (instr_reg == 0x96)
+            instr_func = &sub_a_hlmem;
+        else
+            instr_func = &sub_a_r8;
+        return;
+    }
+    if (b_7_3 == 19) {
+        if (instr_reg == 0x9E)
+            instr_func = &sbc_a_hlmem;
+        else
+            instr_func = &sbc_a_r8;
+        return;
+    }
+    if (b_7_3 == 20) {
+        if (instr_reg == 0xA6)
+            instr_func = &and_a_hlmem;
+        else
+            instr_func = &and_a_r8;
+        return;
+    }
+    if (b_7_3 == 21) {
+        if (instr_reg == 0xAE)
+            instr_func = &xor_a_hlmem;
+        else
+            instr_func = &xor_a_r8;
+        return;
+    }
+    if (b_7_3 == 22) {
+        if (instr_reg == 0xB6)
+            instr_func = &or_a_hlmem;
+        else
+            instr_func = &or_a_r8;
+        return;
+    }
+    if (b_7_3 == 23) {
+        if (instr_reg == 0xBE)
+            instr_func = &cp_a_hlmem;
+        else
+            instr_func = &cp_a_r8;
+        return;
+    }
+#pragma endregion
+
+    /* "Block 3." */
+#pragma region
+    if (instr_reg == 0xC6) {
+        instr_func = &add_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xCE) {
+        instr_func = &adc_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xD6) {
+        instr_func = &sub_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xDE) {
+        instr_func = &sbc_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xE6) {
+        instr_func = &and_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xEE) {
+        instr_func = &xor_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xF6) {
+        instr_func = &or_a_imm8;
+        return;
+    }
+    if (instr_reg == 0xFE) {
+        instr_func = &cp_a_imm8;
+        return;
+    }
+
+    if (b_7_5 == 6 && b_2_0 == 0) {
+        instr_func = &ret_cond;
+        return;
+    }
+    if (instr_reg == 0xC9) {
+        instr_func = &ret;
+        return;
+    }
+    if (instr_reg == 0xD9) {
+        instr_func = &reti;
+        return;
+    }
+    if (b_7_5 == 6 && b_2_0 == 2) {
+        instr_func = &jp_cond_imm16;
+        return;
+    }
+    if (instr_reg == 0xC3) {
+        instr_func = &jp_imm16;
+        return;
+    }
+    if (instr_reg == 0xE9) {
+        instr_func = &jp_hl;
+        return;
+    }
+    if (b_7_5 == 6 && b_2_0 == 4) {
+        instr_func = &call_cond_imm16;
+        return;
+    }
+    if (instr_reg == 0xCD) {
+        instr_func = &call_imm16;
+        return;
+    }
+    if (b_7_6 == 3 && b_2_0 == 7) {
+        instr_func = &rst_tgt3;
+        return;
+    }
+
+    if (b_7_6 == 3 && b_3_0 == 1) {
+        instr_func = &pop_r16stk;
+        return;
+    }
+    if (b_7_6 == 3 && b_3_0 == 5) {
+        instr_func = &push_r16stk;
+        return;
+    }
+
+    if (instr_reg == 0xE2) {
+        instr_func = &ldh_cmem_a;
+        return;
+    }
+    if (instr_reg == 0xE0) {
+        instr_func = &ldh_imm8mem_a;
+        return;
+    }
+    if (instr_reg == 0xEA) {
+        instr_func = &ld_imm16mem_a;
+        return;
+    }
+    if (instr_reg == 0xF2) {
+        instr_func = &ld_a_cmem;
+        return;
+    }
+    if (instr_reg == 0xF0) {
+        instr_func = &ldh_a_imm8mem;
+        return;
+    }
+    if (instr_reg == 0xFA) {
+        instr_func = &ld_a_imm16mem;
+        return;
+    }
+
+    if (instr_reg == 0xE8) {
+        instr_func = &add_sp_imm8;
+        return;
+    }
+    if (instr_reg == 0xF8) {
+        instr_func = &ld_hl_sp_imm8;
+        return;
+    }
+    if (instr_reg == 0xF9) {
+        instr_func = &ld_sp_hl;
+        return;
+    }
+
+    if (instr_reg == 0xF3) {
+        instr_func = &di;
+        return;
+    }
+    if (instr_reg == 0xFB) {
+        instr_func = &ei;
+        return;
+    }
+#pragma endregion
+}
 
 #ifdef CPU_TEST
 bool cpu_test_init(read_fn _read, write_fn _write, receive_int_fn _receive_int)
@@ -1870,6 +2235,8 @@ void cpu_test_set_state(cpu_state _state) {
     _state.af_reg &= 0xFFF0;
     state = _state;
     set_ime = false;
+    cb_prefixed = false;
+
     fetch_and_decode();
 }
 #endif

@@ -37,7 +37,7 @@ WriteType = ctypes.CFUNCTYPE(None, ctypes.c_uint16, ctypes.c_uint8)
 write_cb = WriteType(py_write)
 
 def py_receive_interrupt(jump_vec_ptr):
-    return False
+    return ctypes.c_bool(False)
 InterruptType = ctypes.CFUNCTYPE(
     ctypes.c_bool, ctypes.POINTER(ctypes.c_uint16))
 receive_interrupt_cb = InterruptType(py_receive_interrupt)
@@ -52,7 +52,7 @@ lib.cpu_test_init(read_cb, write_cb, receive_interrupt_cb)
 
 passed = 0
 total = 0
-for path in glob.glob("test/sm83/v1/??.json"):
+for path in glob.glob("test/sm83/v1/*.json"):
     with open(path) as f:
         tests = json.load(f)
 
