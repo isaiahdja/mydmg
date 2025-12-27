@@ -59,6 +59,10 @@ bool interrupt_send_interrupt(uint16_t *jump_vec)
     return false;
 }
 
+bool interrupt_pending() {
+    return if_reg & ie_reg != 0x00;
+}
+
 void request_interrupt(interrupt_type type) {
     if_reg = set_bit(if_reg, type, 1);
 }

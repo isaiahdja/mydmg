@@ -24,6 +24,7 @@ static bool instr_complete;
 
 static read_fn memory_read;
 static write_fn memory_write;
+static pending_int_fn pending_int;
 static receive_int_fn receive_int;
 
 static bool cb_prefixed = false;
@@ -31,6 +32,7 @@ static bool cond;
 static int adj;
 static bool set_ime = false;
 static uint16_t jump_vec;
+bool halted = false;
 
 static void fetch_and_decode(void);
 static void nop(void);
@@ -84,6 +86,7 @@ bool cpu_init(void)
     memory_read = &bus_read_cpu;
     memory_write = &bus_write_cpu;
     receive_int = &interrupt_send_interrupt;
+    pending_int = &interrupt_pending;
 
     /* DMG boot handoff state. */
     state = (cpu_state){
@@ -106,6 +109,13 @@ bool cpu_init(void)
 
 void cpu_tick(void)
 {
+    if (halted) {
+        if (pending_int())
+            halted = false;
+        else
+            return;
+    }
+    
     if (set_ime) {
         state.ime_flag = 1;
         set_ime = false;
@@ -125,8 +135,9 @@ void cpu_tick(void)
         fetch_and_decode();
 
         if (!was_cb_prefixed && state.ime_flag == 1 && receive_int(&jump_vec)) {
+            /* Interrupt Service Routine. */
             state.ime_flag = 0;
-            instr_func = &call_int; /* Interrupt Service Routine. */
+            instr_func = &call_int;
         }
     }
     else
@@ -629,7 +640,8 @@ static void stop()
 }
 static void halt()
 {
-    /* TODO: HALT instruction. */
+    printf("HALT\n");
+    halted = true;
     instr_complete = true;
 }
 static void ld_hlmem_r8()
@@ -1776,7 +1788,6 @@ static void set_b3_hlmem()
 }
 static void call_int()
 {
-    /* Interrupt Service Routine. */
     switch (instr_cycle) {
         case 0:
             state.pc_reg--;
@@ -1803,7 +1814,11 @@ static void fetch_and_decode()
     instr_func = &nop;
     instr_cycle = 0;
 
-    instr_reg = memory_read(state.pc_reg++);
+    instr_reg = memory_read(state.pc_reg);
+    if (!halted)
+        state.pc_reg++;
+    else if (state.ime_flag == 1)
+        return;
 
     int b_7_6 = get_bits(instr_reg, 7, 6);
     int b_2_0 = get_bits(instr_reg, 2, 0);
@@ -2216,15 +2231,18 @@ static void fetch_and_decode()
 }
 
 #ifdef CPU_TEST
-bool cpu_test_init(read_fn _read, write_fn _write, receive_int_fn _receive_int)
+bool cpu_test_init(read_fn _read, write_fn _write,
+    pending_int_fn _pending_int, receive_int_fn _receive_int)
 {
     memory_read = _read;
     memory_write = _write;
+    pending_int = _pending_int;
     receive_int = _receive_int;
 
     instr_func = &nop;
     instr_cycle = 0;
     instr_complete = false;
+    set_ime = false;
 
     return true;
 }
@@ -2236,6 +2254,7 @@ void cpu_test_set_state(cpu_state _state) {
     state = _state;
     set_ime = false;
     cb_prefixed = false;
+    halted = false;
 
     fetch_and_decode();
 }

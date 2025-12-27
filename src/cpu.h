@@ -16,6 +16,7 @@ typedef struct {
 
 typedef uint8_t (*read_fn)(uint16_t);
 typedef void (*write_fn)(uint16_t, uint8_t);
+typedef bool (*pending_int_fn)(void);
 typedef bool (*receive_int_fn)(uint16_t*);
 
 #ifndef CPU_TEST
@@ -28,6 +29,7 @@ byte hram_read(uint16_t addr);
 void hram_write(uint16_t addr, byte val);
 #endif
 
-bool cpu_test_init(read_fn _read, write_fn _write, receive_int_fn _receive_int);
+bool cpu_test_init(read_fn _read, write_fn _write,
+    pending_int_fn _pending_int, receive_int_fn _receive_int);
 cpu_state cpu_test_get_state(void);
 void cpu_test_set_state(cpu_state _state);

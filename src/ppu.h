@@ -2,6 +2,7 @@
 #include "byte.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <SDL3/SDL.h>
 
 typedef enum {
     MODE0_HBLANK,
@@ -13,13 +14,14 @@ typedef enum {
 bool ppu_init(void);
 void ppu_tick(void);
 
-ppu_mode ppu_get_mode(void);
-
 byte vram_read(uint16_t addr);
 void vram_write(uint16_t addr, byte val);
 
 byte oam_read(uint16_t addr);
 void oam_write(uint16_t addr, byte val);
+
+ppu_mode ppu_get_mode(void);
+uint32_t *ppu_get_frame_buffer(void);
 
 byte ppu_lcdc_read(void);
 void ppu_lcdc_write(byte val);

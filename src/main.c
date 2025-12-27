@@ -14,6 +14,8 @@ static int scale_factor;
 static int window_width;
 static int window_height;
 static SDL_Window *window;
+static SDL_Renderer *renderer;
+static SDL_Texture *window_tex;
 
 static bool running = true;
 
@@ -35,11 +37,15 @@ int main(int argc, char *argv[])
     scale_factor = 3;
     window_width = GB_WIDTH * scale_factor;
     window_height = GB_HEIGHT * scale_factor;
-    /* TODO: SDL_CreateWindowAndRenderer (?) */
-    window = SDL_CreateWindow(
-        "MyDMG", window_width, window_height, 0);
-    if (window == NULL)
+    SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, 0,
+        &window, &renderer);
+    if (window == NULL || renderer == NULL)
         goto failure;
+    window_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STREAMING, GB_WIDTH, GB_HEIGHT);
+    if (window_tex == NULL)
+        goto failure;
+    SDL_SetTextureScaleMode(window_tex, SDL_SCALEMODE_PIXELART);
 
 #ifdef DEBUG
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_DEBUG);
@@ -52,12 +58,18 @@ int main(int argc, char *argv[])
 
     cart_deinit();
     SDL_DestroyWindow(window);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(window_tex);
     SDL_Quit();
     return 0;
 failure:
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
     if (window != NULL)
         SDL_DestroyWindow(window);
+    if (renderer != NULL)
+        SDL_DestroyRenderer(renderer);
+    if (window_tex != NULL)
+        SDL_DestroyTexture(window_tex);
     if (sdl_initialized)
         SDL_Quit();
     return -1;
@@ -71,6 +83,10 @@ static void loop()
         Uint64 start = SDL_GetPerformanceCounter();
 
         run_frame();
+        
+        SDL_RenderClear(renderer);
+        SDL_UpdateTexture(window_tex, NULL, sys_get_frame_buffer(), GB_WIDTH * 4);
+        SDL_RenderTexture(renderer, window_tex, NULL, NULL);
 
         Uint64 end = SDL_GetPerformanceCounter();
         double secs_elapsed = (double)(end - start) / (double)counter_freq;
@@ -82,7 +98,7 @@ static void loop()
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
         
-        /* TODO: Scale and display frame. */
+        SDL_RenderPresent(renderer);
     }
 }
 

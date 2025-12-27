@@ -18,4 +18,5 @@ byte interrupt_ie_read(void);
 void interrupt_ie_write(byte val);
 
 bool interrupt_send_interrupt(uint16_t *jump_vec);
+bool interrupt_pending(void);
 void request_interrupt(interrupt_type type);

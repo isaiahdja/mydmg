@@ -36,6 +36,10 @@ void sys_start_frame()
     input_poll_and_load();
 }
 
+uint32_t *sys_get_frame_buffer() {
+    return ppu_get_frame_buffer();
+}
+
 byte wram_read(uint16_t addr) {
     return wram[addr - WRAM_START];
 }

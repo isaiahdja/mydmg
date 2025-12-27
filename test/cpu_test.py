@@ -36,23 +36,29 @@ def py_write(addr, val):
 WriteType = ctypes.CFUNCTYPE(None, ctypes.c_uint16, ctypes.c_uint8)
 write_cb = WriteType(py_write)
 
+def py_pending_interrupt():
+    return False
+PendingIntType = ctypes.CFUNCTYPE(
+    ctypes.c_bool)
+pending_interrupt_cb = PendingIntType(py_pending_interrupt)
+
 def py_receive_interrupt(jump_vec_ptr):
-    return ctypes.c_bool(False)
-InterruptType = ctypes.CFUNCTYPE(
+    return False
+ReceiveIntType = ctypes.CFUNCTYPE(
     ctypes.c_bool, ctypes.POINTER(ctypes.c_uint16))
-receive_interrupt_cb = InterruptType(py_receive_interrupt)
+receive_interrupt_cb = ReceiveIntType(py_receive_interrupt)
 
 lib = ctypes.CDLL("build-debug/libcpu_test.so")
 lib.cpu_test_init.restype = ctypes.c_bool
-lib.cpu_test_init.argtypes = [ReadType, WriteType, InterruptType]
+lib.cpu_test_init.argtypes = [ReadType, WriteType, PendingIntType, ReceiveIntType]
 lib.cpu_test_get_state.restype = CPUState
 lib.cpu_test_set_state.argtypes = [CPUState]
 
-lib.cpu_test_init(read_cb, write_cb, receive_interrupt_cb)
+lib.cpu_test_init(read_cb, write_cb, pending_interrupt_cb, receive_interrupt_cb)
 
 passed = 0
 total = 0
-for path in glob.glob("test/sm83/v1/*.json"):
+for path in glob.glob("test/sm83/v1/??.json"):
     with open(path) as f:
         tests = json.load(f)
 
