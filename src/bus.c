@@ -76,9 +76,8 @@ void bus_write_cpu(uint16_t addr, byte val)
             cart_write(addr, val);
             break;
         case VRAM:
-            /* The CPU cannot access VRAM during mode 3. */
             if (mode == MODE3_DRAW)
-                return;
+                break;
             vram_write(addr, val);
             break;
         case ECHO:
@@ -87,7 +86,6 @@ void bus_write_cpu(uint16_t addr, byte val)
             wram_write(addr, val);
             break;
         case OAM:
-            /* The CPU cannot access OAM during mode 2 nor mode 3. */
             if (mode == MODE2_OAM || mode == MODE3_DRAW)
                 return;
             oam_write(addr, val);
@@ -178,6 +176,8 @@ static byte io_read(uint16_t addr)
         case STAT_REG: return ppu_stat_read();
         case SCY_REG:  return ppu_scy_read();
         case SCX_REG:  return ppu_scx_read();
+        case LY_REG:   return ppu_ly_read();
+        case LYC_REG:  return ppu_lyc_read();
         case DMA_REG:  return dma_dma_read();
         case BGP_REG:  return ppu_bgp_read();
         case OBP0_REG: return ppu_obp0_read();
@@ -205,6 +205,8 @@ static void io_write(uint16_t addr, byte val)
         case STAT_REG: ppu_stat_write(val);     break;
         case SCY_REG:  ppu_scy_write(val);      break;
         case SCX_REG:  ppu_scx_write(val);      break;
+        case LY_REG:   ppu_ly_write(val);       break;
+        case LYC_REG:  ppu_lyc_write(val);      break;
         case DMA_REG:  dma_dma_write(val);      break;
         case BGP_REG:  ppu_bgp_write(val);      break;
         case OBP0_REG: ppu_obp0_write(val);     break;

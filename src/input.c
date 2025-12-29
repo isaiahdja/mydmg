@@ -24,14 +24,14 @@ typedef enum {
 #define NUM_BUTTONS 8
 
 static button buttons[NUM_BUTTONS] = {
-    [START]  = { false, SDL_SCANCODE_U },
-    [SELECT] = { false, SDL_SCANCODE_I },
-    [B]      = { false, SDL_SCANCODE_J },
-    [A]      = { false, SDL_SCANCODE_K },
-    [DOWN]   = { false, SDL_SCANCODE_S },
-    [UP]     = { false, SDL_SCANCODE_W },
-    [LEFT]   = { false, SDL_SCANCODE_A },
-    [RIGHT]  = { false, SDL_SCANCODE_D }
+    [START]  = { false, SDL_SCANCODE_RETURN },
+    [SELECT] = { false, SDL_SCANCODE_RSHIFT },
+    [B]      = { false, SDL_SCANCODE_Z },
+    [A]      = { false, SDL_SCANCODE_X },
+    [DOWN]   = { false, SDL_SCANCODE_DOWN },
+    [UP]     = { false, SDL_SCANCODE_UP },
+    [LEFT]   = { false, SDL_SCANCODE_LEFT },
+    [RIGHT]  = { false, SDL_SCANCODE_RIGHT }
 };
 
 static void load_joyp_nibble();

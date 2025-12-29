@@ -91,12 +91,13 @@ static void loop()
         Uint64 end = SDL_GetPerformanceCounter();
         double secs_elapsed = (double)(end - start) / (double)counter_freq;
         double secs_delay = target_secs_per_frame - secs_elapsed;
-        Uint64 nanos_delay = secs_delay * 1e9;
-        if (secs_delay >= 0)
+        if (secs_delay >= 0) {
+            Uint64 nanos_delay = secs_delay * 1e9;
             SDL_DelayPrecise(nanos_delay);
+        }
         else
             SDL_LogCritical(
-                SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target");
+                SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target by %lf seconds", -secs_delay);
         
         SDL_RenderPresent(renderer);
     }
