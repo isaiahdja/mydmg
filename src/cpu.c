@@ -136,6 +136,7 @@ void cpu_tick(void)
 
         if (!was_cb_prefixed && state.ime_flag == 1 && receive_int(&jump_vec)) {
             /* Interrupt Service Routine. */
+            halted = false;
             state.ime_flag = 0;
             instr_func = &call_int;
             cb_prefixed = false;
@@ -642,7 +643,7 @@ static void stop()
 static void halt()
 {
     //printf("HALT\n");
-    halted = true;
+    //halted = true;
     instr_complete = true;
 }
 static void ld_hlmem_r8()

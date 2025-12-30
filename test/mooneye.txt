@@ -9,7 +9,7 @@ acceptance/
     instr/
         daa.gb                      | PASSED | 12/29/2025 |
     interrupts/
-        ie_push.gb                  | FAILED | 12/29/2025 | R1: not cancelled
+        ie_push.gb                  | FAILED | 12/29/2025 | R1: not cancelled (Have to refactor interrupts) (Full test requires serial interrupt)
     oam_dma/
         basic.gb                    | PASSED | 12/29/2025 |
         reg_read.gb                 | PASSED | 12/29/2025 |
@@ -35,7 +35,7 @@ acceptance/
     
     add_sp_timing.gb                | PASSED | 12/29/2025 |
 
-    boot_div-dmgABCmgb.gb           | FAILED | 12/29/2025 |
+    boot_div-dmgABCmgb.gb           | FAILED | 12/29/2025 | Need to know system clock at bppt handoff (?)
     boot_hwio-dmgABCmgb.gb          | FAILED | 12/29/2025 | Haven't set serial or audio IO registers yet.
     boot_regs-dmgABC.gb             | PASSED | 12/29/2025 |
 

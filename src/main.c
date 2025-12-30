@@ -39,6 +39,8 @@ int main(int argc, char *argv[])
     window_height = GB_HEIGHT * scale_factor;
     SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, 0,
         &window, &renderer);
+    if (!SDL_SetRenderVSync(renderer, 1))
+        SDL_Log("Could not initialize renderer with VSync");
     if (window == NULL || renderer == NULL)
         goto failure;
     window_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
@@ -87,6 +89,7 @@ static void loop()
         SDL_RenderClear(renderer);
         SDL_UpdateTexture(window_tex, NULL, sys_get_frame_buffer(), GB_WIDTH * 4);
         SDL_RenderTexture(renderer, window_tex, NULL, NULL);
+        SDL_RenderPresent(renderer);
 
         Uint64 end = SDL_GetPerformanceCounter();
         double secs_elapsed = (double)(end - start) / (double)counter_freq;
@@ -98,8 +101,6 @@ static void loop()
         else
             SDL_LogCritical(
                 SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target by %lf seconds", -secs_delay);
-        
-        SDL_RenderPresent(renderer);
     }
 }
 
