@@ -67,17 +67,21 @@ static byte obp0_reg, obp1_reg;
 static byte wy_reg, wx_reg;
 
 static uint32_t dmg_colors[4] = {
-    0xFFC9EDFF, /* White      */
-    0xFF9ACAE2, /* Light gray */
-    0xFF77B1CE, /* Dark gray  */
-    0xFF427A96  /* Black      */
+    0xFF89C177, /* 100% */
+    0xFF4DA350, /*  66% */
+    0xFF36774A, /*  33% */
+    0xFF224939  /*   0% */
 };
 static uint32_t frame_buffer[GB_HEIGHT * GB_WIDTH];
 
 static ppu_mode mode;
 static void set_mode(ppu_mode _mode) {
     mode = _mode;
-    stat_reg = overlay_masked(stat_reg, mode, 0x03);
+    
+    if (mode == LCD_DISABLED)
+        stat_reg &= 0xFC;
+    else
+        stat_reg = overlay_masked(stat_reg, mode, 0x03);
 }
 static bit prev_vblank_int_signal = 0;
 
@@ -305,7 +309,7 @@ void ppu_lcdc_write(byte val) {
     lcdc_reg = val;
 
     if (lcd_enable() == 0 && prev_lcd_enable == 1) {
-        stat_reg &= 0xFC;
+        set_mode(LCD_DISABLED);
     }
     else if (lcd_enable() == 1 && prev_lcd_enable == 0) {
         set_mode(MODE2_OAM);

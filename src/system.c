@@ -18,6 +18,7 @@ bool sys_init()
         cpu_init() &&
         interrupt_init() &&
         ppu_init() &&
+        input_init() &&
         dma_init()
     );
 }

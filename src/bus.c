@@ -17,67 +17,114 @@ static byte io_read(uint16_t addr);
 static void io_write(uint16_t addr, byte val);
 static inline uint16_t map_echo_to_wram(uint16_t addr);
 
+
+typedef enum {
+    EXT_BUS,
+    VRAM_BUS,
+    /* ... (?) */
+    BUS_NOT_DEFINED
+} bus_type;
+static bus_type dma_read_bus;
+static byte dma_read_val;
+
 /* For the CPU - (Attempt to) read memory at addr. */
 byte bus_read_cpu(uint16_t addr)
 {
     region_type region = get_addr_region(addr);
-
-    /* HRAM is always accessible. */
-    if (region == HRAM)
-        return hram_read(addr);
-    
-    if (dma_is_active())
-        return 0xFF;
-
     ppu_mode mode = ppu_get_mode();
+    bool ppu_conflict = false;
+    bool dma_conflict = false;
+    byte val = 0xFF;
+
     switch (region) {
         case BANK0:
         case BANK1:
         case EXT_RAM:
-            return cart_read(addr);
+            if (dma_is_active() && dma_read_bus == EXT_BUS) {
+                dma_conflict = true;
+                break;
+            }
+            val = cart_read(addr);
+            break;
         case VRAM:
-            if (mode == MODE3_DRAW)
-                return 0xFF;
-            return vram_read(addr);
+            if (dma_is_active() && dma_read_bus == VRAM_BUS) {
+                dma_conflict = true;
+                break;
+            }
+            if (mode == MODE3_DRAW) {
+                ppu_conflict = true;
+                break;
+            }
+            val = vram_read(addr);
+            break;
         case ECHO:
             addr = map_echo_to_wram(addr);
         case WRAM:
-            return wram_read(addr);
+            val = wram_read(addr);
+            break;
         case OAM:
-            if (mode == MODE2_OAM || mode == MODE3_DRAW)
-                return 0xFF;
-            return oam_read(addr);
+            if (dma_is_active()) {
+                dma_conflict = true;
+                break;
+            }
+            if (mode == MODE2_OAM || mode == MODE3_DRAW) {
+                ppu_conflict = true;
+                break;
+            }
+            val = oam_read(addr);
+            break;
         case IO_REGS:
-            return io_read(addr);
+            val = io_read(addr);
+            break;
+        case HRAM:
+            val = hram_read(addr);
+            break;
     }
     
-    return 0xFF;
+    if (ppu_conflict) {
+#ifdef DEBUG
+        printf("PPU conflict for CPU memory read!\n");
+#endif
+        val = 0xFF;
+    }
+
+    if (dma_conflict) {
+#ifdef DEBUG
+        printf("DMA conflict for CPU memory read!\n");
+#endif
+        val = region == OAM ? 0xFF : dma_read_val;
+    }
+
+    return val;
 }
 
 /* For the CPU - (Attempt to) write val to addr in memory. */
 void bus_write_cpu(uint16_t addr, byte val)
 {
     region_type region = get_addr_region(addr);
-
-    /* HRAM is always accessible. */
-    if (region == HRAM) {
-        hram_write(addr, val);
-        return;
-    }
-
-    if (dma_is_active())
-        return;
-
     ppu_mode mode = ppu_get_mode();
+    bool ppu_conflict = false;
+    bool dma_conflict = false;
+
     switch (region) {
         case BANK0:
         case BANK1:
         case EXT_RAM:
+            if (dma_is_active() && dma_read_bus == EXT_BUS) {
+                dma_conflict = true;
+                break;
+            }
             cart_write(addr, val);
             break;
         case VRAM:
-            if (mode == MODE3_DRAW)
+            if (mode == MODE3_DRAW) {
+                ppu_conflict = true;
                 break;
+            }
+            if (dma_is_active() && dma_read_bus == VRAM_BUS) {
+                dma_conflict = true;
+                break;
+            }
             vram_write(addr, val);
             break;
         case ECHO:
@@ -86,14 +133,30 @@ void bus_write_cpu(uint16_t addr, byte val)
             wram_write(addr, val);
             break;
         case OAM:
-            if (mode == MODE2_OAM || mode == MODE3_DRAW)
-                return;
+            if (mode == MODE2_OAM || mode == MODE3_DRAW) {
+                ppu_conflict = true;
+                break;
+            }
+            if (dma_is_active()) {
+                dma_conflict = true;
+                break;
+            }
             oam_write(addr, val);
             break;
         case IO_REGS:
             io_write(addr, val);
             break;
+        case HRAM:
+            hram_write(addr, val);
+            break;
     }
+
+#ifdef DEBUG
+    if (ppu_conflict)
+        printf("PPU conflict for CPU memory write!\n");
+    if (dma_conflict)
+        printf("DMA conflict for CPU memory write!\n");
+#endif
 }
 
 /* For PPU - Read memory at addr. 
@@ -101,38 +164,63 @@ void bus_write_cpu(uint16_t addr, byte val)
 byte bus_read_ppu(uint16_t addr)
 {
     region_type region = get_addr_region(addr);
-    if (region == VRAM)
-        return vram_read(addr);
-    else if (region == OAM)
-        /* TODO: Check OAM DMA transfer (?)
-           PPU reading OAM during DMA transfer is just glitch behavior. */
-        return oam_read(addr);
-    
-    return 0xFF;
+    byte val = 0xFF;
+    bool dma_conflict = false;
+
+    if (region == VRAM) {
+        if (dma_is_active() && dma_read_bus == VRAM_BUS)
+            dma_conflict = true;
+        else
+            val = vram_read(addr);
+    }
+    else if (region == OAM) {
+        if (dma_is_active())
+            dma_conflict = true;
+        else
+            val = oam_read(addr);
+    }
+
+    if (dma_conflict) {
+#ifdef DEBUG
+        printf("DMA conflict for PPU memory read!\n");
+        val = region == OAM ? 0xFF : dma_read_bus;
+#endif
+    }
+
+    return val;
 }
 
 void bus_copy_dma(uint16_t src, uint16_t dst)
 {
-    byte val;
+    /* Reads beyond external RAM are invalid and lead to undefined behavior.
+       Here, we just transfer 0xFF. */
+       
     region_type src_region = get_addr_region(src);
+    byte val = 0xFF;
+    dma_read_bus = BUS_NOT_DEFINED;
 
-    /* TODO: Expand accessible source regions (?) */
     switch (src_region) {
         case BANK0:
         case BANK1:
         case EXT_RAM:
+            dma_read_bus = EXT_BUS;
             val = cart_read(src);
             break;
         case VRAM:
+            dma_read_bus = VRAM_BUS;
             val = vram_read(src);
             break;
         case WRAM:
             val = wram_read(src);
             break;
+#ifdef DEBUG
         default:
-            val = 0xFF;
+            printf("DMA read source in undefined region\n");
+            break;
+#endif
     }
 
+    dma_read_val = val;
     oam_write(dst, val);
 }
 
@@ -220,5 +308,6 @@ static void io_write(uint16_t addr, byte val)
 
 /* Echo region maps to WRAM. */
 static inline uint16_t map_echo_to_wram(uint16_t addr) {
-    return overlay_masked(addr, 0xC000, 0xE000);
+    uint16_t map = overlay_masked(addr, 0xC000, 0xE000);
+    return map;
 }

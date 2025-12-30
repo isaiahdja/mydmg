@@ -4,3 +4,6 @@
 [submodule "vendored/SDL"]
 	path = vendored/SDL
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "test/gb-test-roms"]
+	path = test/gb-test-roms
+	url = https://github.com/retrio/gb-test-roms.git

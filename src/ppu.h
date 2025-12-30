@@ -8,7 +8,9 @@ typedef enum {
     MODE0_HBLANK,
     MODE1_VBLANK,
     MODE2_OAM,
-    MODE3_DRAW
+    MODE3_DRAW,
+
+    LCD_DISABLED
 } ppu_mode;
 
 bool ppu_init(void);

@@ -11,8 +11,6 @@
 #define JUMP_VEC_JOYPAD 0x0060
 
 #define IF_RW_MASK 0x1F
-#define IE_RW_MASK 0x1F
-
 static byte if_reg, ie_reg;
 
 #define NUM_INTERRUPTS 5
@@ -44,7 +42,8 @@ byte interrupt_ie_read() {
     return ie_reg;
 }
 void interrupt_ie_write(byte val) {
-    ie_reg = overlay_masked(ie_reg, val, IE_RW_MASK);
+    /* All bits are actually writable. */
+    ie_reg = val;
 }
 
 bool interrupt_send_interrupt(uint16_t *jump_vec)

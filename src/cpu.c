@@ -1,5 +1,5 @@
 #include "cpu.h"
-#ifndef CPU_TEST
+#ifndef SM83
 #include "bus.h"
 #include "interrupt.h"
 #endif
@@ -10,7 +10,7 @@
 /* Central Processing Unit core. */
 
 /* High RAM. */
-#ifndef CPU_TEST
+#ifndef SM83
 static byte hram[HRAM_SIZE];
 #endif
 
@@ -80,7 +80,7 @@ static inline void set_carry(bit val) {
     state.af_reg = set_bit(state.af_reg, 4, val);
 }
 
-#ifndef CPU_TEST
+#ifndef SM83
 bool cpu_init(void)
 {
     memory_read = &bus_read_cpu;
@@ -90,7 +90,7 @@ bool cpu_init(void)
 
     /* DMG boot handoff state. */
     state = (cpu_state){
-        0x0108,
+        0x01B0,
         0x0013,
         0x00D8,
         0x014D,
@@ -128,7 +128,7 @@ void cpu_tick(void)
        as it is reserved for fetching. */
     instr_func();
 
-    if (instr_complete) {
+    if (instr_complete)  {
         /* The fetch between a CB prefix and the opcode is non-interruptible. */
         bool was_cb_prefixed = cb_prefixed;
         /* fetch_and_decode() will reset instr_complete, instr_cycle, cb_prefixed... */
@@ -138,13 +138,14 @@ void cpu_tick(void)
             /* Interrupt Service Routine. */
             state.ime_flag = 0;
             instr_func = &call_int;
+            cb_prefixed = false;
         }
     }
     else
         instr_cycle++;
 }
 
-#ifndef CPU_TEST
+#ifndef SM83
 byte hram_read(uint16_t addr) {
     return hram[addr - HRAM_START];
 }
@@ -640,7 +641,7 @@ static void stop()
 }
 static void halt()
 {
-    printf("HALT\n");
+    //printf("HALT\n");
     halted = true;
     instr_complete = true;
 }
@@ -1415,7 +1416,7 @@ static void ld_hl_sp_imm8()
             state.hl_reg = set_lo_byte(state.hl_reg, sum);
             break;
         case 2:
-            state.hl_reg = set_hi_byte(state.hl_reg, get_hi_byte(state.sp_reg) + adj);
+            state.hl_reg = set_hi_byte(state.hl_reg, get_hi_byte(state.sp_reg) + (byte)adj);
             instr_complete = true;
             break;
     }
@@ -1815,6 +1816,7 @@ static void fetch_and_decode()
     instr_cycle = 0;
 
     instr_reg = memory_read(state.pc_reg);
+    //printf("PC = %04x, IR = %02X\n", state.pc_reg, instr_reg);
     if (!halted)
         state.pc_reg++;
     else if (state.ime_flag == 1)
@@ -2230,8 +2232,8 @@ static void fetch_and_decode()
 #pragma endregion
 }
 
-#ifdef CPU_TEST
-bool cpu_test_init(read_fn _read, write_fn _write,
+#ifdef SM83
+bool sm83_init(read_fn _read, write_fn _write,
     pending_int_fn _pending_int, receive_int_fn _receive_int)
 {
     memory_read = _read;
@@ -2246,10 +2248,10 @@ bool cpu_test_init(read_fn _read, write_fn _write,
 
     return true;
 }
-cpu_state cpu_test_get_state() {
+cpu_state sm83_get_state() {
     return state;
 }
-void cpu_test_set_state(cpu_state _state) {
+void sm83_set_state(cpu_state _state) {
     _state.af_reg &= 0xFFF0;
     state = _state;
     set_ime = false;

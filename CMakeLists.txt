@@ -4,12 +4,12 @@ project(mydmg)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-add_library(cpu_test SHARED
+add_library(sm83 SHARED
     src/cpu.c
 )
-target_include_directories(cpu_test PRIVATE src)
-target_compile_definitions(cpu_test PRIVATE
-    CPU_TEST
+target_include_directories(sm83 PRIVATE src)
+target_compile_definitions(sm83 PRIVATE
+    SM83
     DEBUG
 )
 
@@ -29,6 +29,7 @@ add_executable(mydmg
     src/dma.c
 
     src/mbc/mbc0.c
+    src/mbc/mbc1.c
 )
 target_include_directories(mydmg PRIVATE src)
 target_link_libraries(mydmg PRIVATE SDL3::SDL3)

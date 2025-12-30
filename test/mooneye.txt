@@ -1,0 +1,81 @@
+Note: Some of the timing tests seem to rely on OAM timing!
+..and we have a DMA timing issue, especially with the control of the bus...
+
+acceptance/
+    bits/
+        mem_oam.gb                  | PASSED | 12/29/2025 |
+        reg_f.gb                    | PASSED | 12/29/2025 |
+        unused_hwio-GS.gb           | PASSED | 12/29/2025 |
+    instr/
+        daa.gb                      | PASSED | 12/29/2025 |
+    interrupts/
+        ie_push.gb                  | FAILED | 12/29/2025 | R1: not cancelled
+    oam_dma/
+        basic.gb                    | PASSED | 12/29/2025 |
+        reg_read.gb                 | PASSED | 12/29/2025 |
+        sources-GS.gb               |        |            | Requires MBC5 + RAM + BATTERY
+    ppu/
+        ...
+    serial/
+        ...
+    timer/
+        div_write.gb                | PASSED | 12/29/2025 | 
+        rapid_toggle.gb             | FAILED | 12/29/2025 |
+        tim00_div_trigger.gb        | PASSED | 12/29/2025 |
+        tim00.gb                    | PASSED | 12/29/2025 |
+        tim01_div_trigger.gb        | PASSED | 12/29/2025 |
+        tim01.gb                    | PASSED | 12/29/2025 |
+        tim10_div_trigger.gb        | PASSED | 12/29/2025 |
+        tim10.gb                    | PASSED | 12/29/2025 |
+        tim11_div_trigger.gb        | PASSED | 12/29/2025 |
+        tim11.gb                    | PASSED | 12/29/2025 |
+        tima_reload.gb              | PASSED | 12/29/2025 |
+        tima_write_reloading.gb     | FAILED | 12/29/2025 |
+        tma_write_reloading.gb      | FAILED | 12/29/2025 |
+    
+    add_sp_timing.gb                | PASSED | 12/29/2025 |
+
+    boot_div-dmgABCmgb.gb           | FAILED | 12/29/2025 |
+    boot_hwio-dmgABCmgb.gb          | FAILED | 12/29/2025 | Haven't set serial or audio IO registers yet.
+    boot_regs-dmgABC.gb             | PASSED | 12/29/2025 |
+
+    call_cc_timing.gb               | PASSED | 12/29/2025 |
+    call_cc_timing2.gb              | PASSED | 12/29/2025 |
+    call_timing.gb                  | PASSED | 12/29/2025 |
+    call_timing2.gb                 | PASSED | 12/29/2025 |
+
+    di_timing-GS.gb                 | PASSED | 12/29/2025 |
+
+    div_timing.gb                   | PASSED | 12/29/2025 |
+
+    ei_sequence.gb                  | PASSED | 12/29/2025 |
+    ei_timing.gb                    | PASSED | 12/29/2025 |
+
+    halt_ime0_ei.gb                 | PASSED | 12/29/2025 |
+    halt_ime0_nointr_timing.gb      | PASSED | 12/29/2025 |
+    halt_ime1_timing.gb             | FAILED | 12/29/2025 |
+    halt_ime1_timing2-GS.gb         | PASSED | 12/29/2025 |
+
+    if_ie_registers.gb              | PASSED | 12/29/2025 |
+    intr_timing.gb                  | PASSED | 12/29/2025 |
+
+    jp_cc_timing.gb                 | PASSED | 12/29/2025 |
+    jp_timing.gb                    | PASSED | 12/29/2025 |
+
+    ld_hl_sp_e_timing.gb            | PASSED | 12/29/2025 |
+
+    oam_dma_restart.gb              | PASSED | 12/29/2025 |
+    oam_dma_start.gb                | PASSED | 12/29/2025 |
+    oam_dma_timing.gb               | PASSED | 12/29/2025 |
+
+    pop_timing.gb                   | PASSED | 12/29/2025 |
+    push_timing.gb                  | PASSED | 12/29/2025 |
+
+    rapid_di_ei.gb                  | PASSED | 12/29/2025 |
+    
+    ret_cc_timing.gb                | PASSED | 12/29/2025 |
+    ret_timing.gb                   | PASSED | 12/29/2025 |
+    reti_intr_timing.gb             | PASSED | 12/29/2025 |
+    reti_timing.gb                  | PASSED | 12/29/2025 |
+
+    rst_timing.gb                   | PASSED | 12/29/2025 |
