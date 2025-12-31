@@ -37,13 +37,19 @@ typedef enum {
 } region_type;
 
 #define JOYP_REG 0xFF00
-/* ... */
+
+#define SB_REG   0xFF01
+#define SC_REG   0xFF02
+
 #define DIV_REG  0xFF04
 #define TIMA_REG 0xFF05
 #define TMA_REG  0xFF06
 #define TAC_REG  0xFF07
+
 #define IF_REG   0xFF0F
+
 /* ... */
+
 #define LCDC_REG 0xFF40
 #define STAT_REG 0xFF41
 #define SCY_REG  0xFF42
@@ -56,7 +62,9 @@ typedef enum {
 #define OBP1_REG 0xFF49
 #define WY_REG   0xFF4A
 #define WX_REG   0xFF4B
-/* ... */
+
+#define BANK_REG 0xFF50
+
 #define IE_REG   0xFFFF
 
 byte bus_read_cpu(uint16_t addr);

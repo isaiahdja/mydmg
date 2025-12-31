@@ -27,15 +27,15 @@ static write_fn memory_write;
 static pending_int_fn pending_int;
 static receive_int_fn receive_int;
 
-static bool cb_prefixed = false;
+static bool cb_prefixed;
 static bool cond;
 static int adj;
-static bool set_ime = false;
-static uint16_t jump_vec;
-bool halted = false;
+static int set_ime;
+static bool halted;
 
 static void fetch_and_decode(void);
 static void nop(void);
+static void di(void);
 static void call_int(void);
 
 static inline byte get_w_latch(void) {
@@ -102,6 +102,9 @@ bool cpu_init(void)
     instr_cycle = 0;
     instr_complete = false;
     instr_func = &nop;
+    set_ime = -1;
+    cb_prefixed = false;
+    halted = false;
 
     return true;
 }
@@ -110,15 +113,16 @@ bool cpu_init(void)
 void cpu_tick(void)
 {
     if (halted) {
-        if (pending_int())
+        if (pending_int()) {
             halted = false;
+            instr_func = &nop;
+        }
         else
             return;
     }
-    
-    if (set_ime) {
-        state.ime_flag = 1;
-        set_ime = false;
+    if (set_ime != -1) {
+        state.ime_flag = set_ime;
+        set_ime = -1;
     }
     
     /* The current instruction function will set instr_completed to true if it
@@ -131,11 +135,16 @@ void cpu_tick(void)
     if (instr_complete)  {
         /* The fetch between a CB prefix and the opcode is non-interruptible. */
         bool was_cb_prefixed = cb_prefixed;
-        /* fetch_and_decode() will reset instr_complete, instr_cycle, cb_prefixed... */
+        /* Like EI, DI is technically delayed by a cycle, but "there is extra
+        circuitry(!) to check if the currently executed instruction is a DI,
+        and defer interrupt dispatch by one cycle (which end up being a whole
+        instruction).*/
+        bool was_di = instr_func == &di;
+        /* fetch_and_decode() will reset instr_func, instr_cycle,
+           instr_complete, cb_prefixed... */
         fetch_and_decode();
 
-        if (!was_cb_prefixed && state.ime_flag == 1 && receive_int(&jump_vec)) {
-            /* Interrupt Service Routine. */
+        if (!was_cb_prefixed && !was_di && (state.ime_flag == 1 && pending_int())) {
             halted = false;
             state.ime_flag = 0;
             instr_func = &call_int;
@@ -638,12 +647,18 @@ static void jr_cond_imm8()
 static void stop()
 {
     /* TODO: STOP instruction. */
-    instr_complete = true;
+#ifdef DEBUG
+    printf("STOP\n");
+#endif
 }
 static void halt()
 {
-    //printf("HALT\n");
-    //halted = true;
+/*
+#ifdef DEBUG
+    printf("HALT\n");
+#endif
+*/
+    halted = true;
     instr_complete = true;
 }
 static void ld_hlmem_r8()
@@ -1435,12 +1450,12 @@ static void ld_sp_hl()
 }
 static void di()
 {
-    state.ime_flag = 0;
+    set_ime = 0;
     instr_complete = true;
 }
 static void ei()
 {
-    set_ime = true;
+    set_ime = 1;
     instr_complete = true;
 }
 static void rlc_r8()
@@ -1788,6 +1803,8 @@ static void set_b3_hlmem()
             break;
     }
 }
+
+static uint16_t jump_vec;
 static void call_int()
 {
     switch (instr_cycle) {
@@ -1799,6 +1816,18 @@ static void call_int()
             break;
         case 2:
             memory_write(state.sp_reg--, get_hi_byte(state.pc_reg));
+
+            /* Only now do we get the jump vector and reset the bit in IF, but
+               only if an interrupt is still pending!
+               Note that this also means that the original interrupt that was
+               going to be serviced may now be replaced by a higher-priority
+               interrupt too. */
+            if (!receive_int(&jump_vec)) {
+#ifdef DEBUG
+                printf("Interrupt glitch triggered\n");
+#endif
+                jump_vec = 0x0000;
+            }
             break;
         case 3:
             memory_write(state.sp_reg, get_lo_byte(state.pc_reg));
@@ -1820,8 +1849,6 @@ static void fetch_and_decode()
     //printf("PC = %04x, IR = %02X\n", state.pc_reg, instr_reg);
     if (!halted)
         state.pc_reg++;
-    else if (state.ime_flag == 1)
-        return;
 
     int b_7_6 = get_bits(instr_reg, 7, 6);
     int b_2_0 = get_bits(instr_reg, 2, 0);
@@ -2245,20 +2272,19 @@ bool sm83_init(read_fn _read, write_fn _write,
     instr_func = &nop;
     instr_cycle = 0;
     instr_complete = false;
-    set_ime = false;
 
     return true;
 }
 cpu_state sm83_get_state() {
     return state;
 }
-void sm83_set_state(cpu_state _state) {
+void sm83_set_state(cpu_state _state)
+{
     _state.af_reg &= 0xFFF0;
     state = _state;
-    set_ime = false;
+    set_ime = -1;
     cb_prefixed = false;
     halted = false;
-
     fetch_and_decode();
 }
 #endif

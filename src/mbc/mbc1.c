@@ -2,6 +2,8 @@
 #include "cart.h"
 #include "bus.h"
 
+#include <stdio.h>
+
 /* MBC1 (No RAM). */
 
 #define BANK1_RW_MASK 0x1F
@@ -26,6 +28,11 @@ byte mbc1_read(uint16_t addr)
 
     bank_number &= (rom_banks - 1);
     uint32_t rom_addr = ((uint32_t)bank_number << 14) | get_bits(addr, 13, 0);
+
+    if (rom_addr >= cart_rom_size) {
+        printf("MBC1: Attempted to read beyond cartridge size!\n");
+        return 0xFF;
+    }
     return cart_rom[rom_addr];
 }
 

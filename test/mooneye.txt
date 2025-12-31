@@ -9,7 +9,7 @@ acceptance/
     instr/
         daa.gb                      | PASSED | 12/29/2025 |
     interrupts/
-        ie_push.gb                  | FAILED | 12/29/2025 | R1: not cancelled (Have to refactor interrupts) (Full test requires serial interrupt)
+        ie_push.gb                  | PASSED | 12/30/2025 |
     oam_dma/
         basic.gb                    | PASSED | 12/29/2025 |
         reg_read.gb                 | PASSED | 12/29/2025 |
@@ -35,7 +35,7 @@ acceptance/
     
     add_sp_timing.gb                | PASSED | 12/29/2025 |
 
-    boot_div-dmgABCmgb.gb           | FAILED | 12/29/2025 | Need to know system clock at bppt handoff (?)
+    boot_div-dmgABCmgb.gb           | FAILED | 12/29/2025 | Need to know system clock at boot handoff (?)
     boot_hwio-dmgABCmgb.gb          | FAILED | 12/29/2025 | Haven't set serial or audio IO registers yet.
     boot_regs-dmgABC.gb             | PASSED | 12/29/2025 |
 
@@ -44,20 +44,20 @@ acceptance/
     call_timing.gb                  | PASSED | 12/29/2025 |
     call_timing2.gb                 | PASSED | 12/29/2025 |
 
-    di_timing-GS.gb                 | PASSED | 12/29/2025 |
+    di_timing-GS.gb                 | PASSED | 12/30/2025 |
 
     div_timing.gb                   | PASSED | 12/29/2025 |
 
-    ei_sequence.gb                  | PASSED | 12/29/2025 |
-    ei_timing.gb                    | PASSED | 12/29/2025 |
+    ei_sequence.gb                  | PASSED | 12/30/2025 |
+    ei_timing.gb                    | PASSED | 12/30/2025 |
 
-    halt_ime0_ei.gb                 | PASSED | 12/29/2025 |
-    halt_ime0_nointr_timing.gb      | PASSED | 12/29/2025 |
-    halt_ime1_timing.gb             | FAILED | 12/29/2025 |
-    halt_ime1_timing2-GS.gb         | PASSED | 12/29/2025 |
+    halt_ime0_ei.gb                 | PASSED | 12/30/2025 |
+    halt_ime0_nointr_timing.gb      | PASSED | 12/30/2025 |
+    halt_ime1_timing.gb             | PASSED | 12/30/2025 |
+    halt_ime1_timing2-GS.gb         | PASSED | 12/30/2025 |
 
-    if_ie_registers.gb              | PASSED | 12/29/2025 |
-    intr_timing.gb                  | PASSED | 12/29/2025 |
+    if_ie_registers.gb              | PASSED | 12/30/2025 |
+    intr_timing.gb                  | PASSED | 12/30/2025 |
 
     jp_cc_timing.gb                 | PASSED | 12/29/2025 |
     jp_timing.gb                    | PASSED | 12/29/2025 |

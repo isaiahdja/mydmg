@@ -34,6 +34,8 @@ bool timer_init(void)
     tima_reg = 0x00, tma_reg = 0x00, tac_reg = 0xF8;
     update_tac_caches();
 
+    system_counter = 0;
+
     return true;
 }
 

@@ -1,6 +1,5 @@
 #include "cart.h"
 #include "SDL3/SDL.h"
-#include <string.h>
 #include <SDL3/SDL.h>
 
 #include "mbc/mbc0.h"

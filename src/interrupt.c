@@ -49,7 +49,7 @@ void interrupt_ie_write(byte val) {
 bool interrupt_send_interrupt(uint16_t *jump_vec)
 {
     for (int i = 0; i < NUM_INTERRUPTS; i++) {
-        if ((get_bit(ie_reg, i) & get_bit(if_reg, i )) == 1) {
+        if ((get_bit(ie_reg, i) & get_bit(if_reg, i)) == 1) {
             if_reg = set_bit(if_reg, i, 0);
             *jump_vec = jump_vecs[i];
             return true;
@@ -59,7 +59,7 @@ bool interrupt_send_interrupt(uint16_t *jump_vec)
 }
 
 bool interrupt_pending() {
-    return if_reg & ie_reg != 0x00;
+    return (if_reg & ie_reg) != 0x00;
 }
 
 void request_interrupt(interrupt_type type) {

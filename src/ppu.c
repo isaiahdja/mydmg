@@ -38,6 +38,7 @@ static inline bit obj_enable(void) {
 static inline bit bg_win_enable(void) {
     return get_bit(lcdc_reg, 0);
 }
+bool just_enabled = false;
 
 #define STAT_RW_MASK 0x78
 static byte stat_reg;
@@ -58,11 +59,11 @@ static bit prev_stat_int_signal = 0;
 static byte scy_reg, scx_reg;
 static byte ly_reg, lyc_reg;
 
+static byte bgp_reg;
+static byte obp0_reg, obp1_reg;
 static inline int get_palette_color(byte palette, int idx) {
     return get_bits(palette, (idx * 2) + 1, (idx * 2));
 }
-static byte bgp_reg;
-static byte obp0_reg, obp1_reg;
 
 static byte wy_reg, wx_reg;
 
@@ -73,30 +74,38 @@ static uint32_t dmg_colors[4] = {
     0xFF224939  /*   0% */
 };
 static uint32_t frame_buffer[GB_HEIGHT * GB_WIDTH];
+static uint32_t off_buffer[GB_HEIGHT * GB_WIDTH];
 
+static void set_mode(ppu_mode _mode);
 static ppu_mode mode;
-static void set_mode(ppu_mode _mode) {
-    mode = _mode;
-    
-    if (mode == LCD_DISABLED)
-        stat_reg &= 0xFC;
-    else
-        stat_reg = overlay_masked(stat_reg, mode, 0x03);
-}
 static bit prev_vblank_int_signal = 0;
 
 #define T_CYCLES_PER_SCANLINE 456
 #define SCANLINES_PER_FRAME 154
 #define MODE2_OAM_T_CYCLES 80
+static int scanline_counter;
 static bool mode3_draw_complete;
 /* Internal register. */
 static byte lx_reg;
-static int scanline_counter;
 
 static void mode0_dot(void);
 static void mode1_dot(void);
 static void mode2_dot(void);
 static void mode3_dot(void);
+
+typedef struct {
+    uint16_t addr;
+    byte obj_x;
+    byte obj_y;
+} obj_slot_type;
+static obj_slot_type scanline_objs[10];
+static int scanline_objs_count;
+static uint16_t mode2_addr;
+typedef enum {
+    CHECK,
+    PUSH, SKIP
+} mode2_cycle_type;
+static mode2_cycle_type mode2_cycle;
 
 /* */
 
@@ -113,33 +122,45 @@ typedef struct {
     int head;
 } fifo;
 
-fifo bg_fifo;
+static fifo bg_fifo;
 
-void fifo_clear(fifo *f);
-bool fifo_pop(fifo *f, pixel *p);
-bool bg_fifo_fill(pixel *p);
+static fifo obj_fifo;
+
+static void fifo_clear(fifo *f);
+static bool fifo_pop(fifo *f, pixel *p);
+static bool bg_fifo_fill(pixel *p);
 
 /* */
 
 typedef struct {
     int dot;
-    byte fetch_x;
 
-    uint16_t id_addr;
     byte tile_id;
     uint16_t data_addr;
     byte data_lo;
     byte data_hi;
-
     pixel pixels[8];
+
+    /* BG/WIN only. */
+    byte fetch_x;
+    uint16_t id_addr;
+
+    /* OBJ only. */
+    byte attributes;
 } fetcher;
 
-int first_fetch_disregard;
-int scx_disregard;
-fetcher bg_fetcher;
+static int first_fetch_disregard;
+static int scx_disregard;
+static fetcher bg_fetcher;
 
-void fetcher_clear(fetcher *f);
-void bg_fetcher_dot(void);
+bool need_to_fetch_obj;
+static obj_slot_type fetch_obj;
+static fetcher obj_fetcher;
+
+static void fetcher_clear(fetcher *f);
+static void bg_fetcher_dot(void);
+static void check_objs_lx(void);
+static void obj_fetcher_dot(void);
 
 bool ppu_init(void)
 {
@@ -155,14 +176,56 @@ bool ppu_init(void)
     wy_reg = 0x00, wx_reg = 0x00;
 
     scanline_counter = 0;
+    /* TODO: Change blank LCD color. */
+    for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++)
+        off_buffer[i] = dmg_colors[0];
 
     return true;
 }
 
 void ppu_tick(void)
 {
-    if (lcd_enable() == 0)
+    if (mode == LCD_DISABLED)
         return;
+
+    /* Pixel FIFO steps by T-cycle. */
+    for (int _ = 0; _ < T_M_RATIO; _++) {
+        switch (mode) {
+            case MODE0_HBLANK:
+                mode0_dot();
+                break;
+            case MODE1_VBLANK:
+                mode1_dot();
+                break;
+            case MODE2_OAM:
+                mode2_dot();
+                break;
+            case MODE3_DRAW:
+                mode3_dot();
+                break;
+        }
+
+        if (++scanline_counter == T_CYCLES_PER_SCANLINE) {
+            /* Begin new scanline. */
+            scanline_counter = 0;
+            if (++ly_reg == SCANLINES_PER_FRAME) {
+                /* Begin new frame. */
+                just_enabled = false;
+                ly_reg = 0;
+            }
+            
+            if (ly_reg >= GB_HEIGHT)
+                set_mode(MODE1_VBLANK);
+            else
+                set_mode(MODE2_OAM);
+        }
+        else if (mode == MODE2_OAM && scanline_counter == MODE2_OAM_T_CYCLES) {
+            set_mode(MODE3_DRAW);
+        }
+        else if (mode == MODE3_DRAW && mode3_draw_complete) {
+            set_mode(MODE0_HBLANK);
+        }
+    }
 
     /* We can check for interrupts every M-cycle as that is how the rest of the
        system steps.
@@ -199,44 +262,35 @@ void ppu_tick(void)
         request_interrupt(INT_VBLANK);
     }
     prev_vblank_int_signal = next_vblank_int_signal;
+}
 
-    /* Pixel FIFO steps by T-cycle. */
-    for (int _ = 0; _ < T_M_RATIO; _++) {
-        switch (mode) {
-            case MODE0_HBLANK:
-                mode0_dot();
-                break;
-            case MODE1_VBLANK:
-                mode1_dot();
-                break;
-            case MODE2_OAM:
-                mode2_dot();
-                break;
-            case MODE3_DRAW:
-                mode3_dot();
-                break;
-        }
-
-        if (++scanline_counter == T_CYCLES_PER_SCANLINE) {
-            scanline_counter = 0;
-            if (++ly_reg == SCANLINES_PER_FRAME)
-                ly_reg = 0;
-            
-            if (ly_reg >= GB_HEIGHT)
-                set_mode(MODE1_VBLANK);
-            else
-                set_mode(MODE2_OAM);
-        }
-        else if (mode == MODE2_OAM && scanline_counter == MODE2_OAM_T_CYCLES) {
+static void set_mode(ppu_mode _mode) {
+    mode = _mode;
+    
+    switch (mode) {
+        case MODE0_HBLANK:
+            break;
+        case MODE1_VBLANK:
+            break;
+        case MODE2_OAM:
+            scanline_objs_count = 0;
+            mode2_addr = OAM_START;
+            mode2_cycle = CHECK;
+            break;
+        case MODE3_DRAW:
+            lx_reg = 0xF8;
             fifo_clear(&bg_fifo); fetcher_clear(&bg_fetcher);
-            first_fetch_disregard = 8; scx_disregard = scx_reg % 8;
-            set_mode(MODE3_DRAW);
-        }
-        else if (mode == MODE3_DRAW && mode3_draw_complete) {
-            set_mode(MODE0_HBLANK);
+            fifo_clear(&obj_fifo); fetcher_clear(&obj_fetcher);
+            scx_disregard = scx_reg % 8;
+            check_objs_lx();
             mode3_draw_complete = false;
-        }
+            break;
+        case LCD_DISABLED:
+            stat_reg &= 0xFC;
+            return;
     }
+
+    stat_reg = overlay_masked(stat_reg, mode, 0x03);
 }
 
 byte vram_read(uint16_t addr) {
@@ -257,6 +311,10 @@ ppu_mode ppu_get_mode() {
     return mode;
 }
 uint32_t *ppu_get_frame_buffer() {
+    /* "When re-enabling the LCD, the PPU will immediately start drawing again,
+       but the screen will stay blank during the first frame." "*/
+    if (mode == LCD_DISABLED || just_enabled)
+        return off_buffer;
     return frame_buffer;
 }
 
@@ -272,32 +330,88 @@ static void mode1_dot()
 
 static void mode2_dot()
 {
-    return;
+    if (scanline_objs_count == 10)
+        return;
+    
+    switch (mode2_cycle) {
+        case CHECK:
+            scanline_objs[scanline_objs_count].addr = mode2_addr;
+            byte obj_y = bus_read_ppu(mode2_addr);
+            scanline_objs[scanline_objs_count].obj_y = obj_y;
+            int screen_start = obj_y - 16;
+            int screen_end = screen_start + (obj_size() == 0 ? 8 : 16);
+            bool on_scanline = (ly_reg >= screen_start) && (ly_reg < screen_end);
+            mode2_cycle = on_scanline ? PUSH : SKIP;
+            break;
+        case PUSH:
+            scanline_objs[scanline_objs_count].obj_x = bus_read_ppu(mode2_addr + 1);
+            scanline_objs_count++;
+        case SKIP:
+            mode2_addr += 4;
+            mode2_cycle = CHECK;
+            break;
+    }
 }
 
 static void mode3_dot()
 {
+    if (obj_enable() && need_to_fetch_obj)
+        obj_fetcher_dot();
     bg_fetcher_dot();
 
-    pixel p;
-    if (fifo_pop(&bg_fifo, &p)) {
-        if (first_fetch_disregard > 0) {
-            first_fetch_disregard--;
-            return;
-        }
+    if (need_to_fetch_obj)
+        return;
+
+    pixel bg_pixel;
+    if (fifo_pop(&bg_fifo, &bg_pixel)) {
+        pixel obj_pixel;
+        bool obj_popped = fifo_pop(&obj_fifo, &obj_pixel);
+
         if (scx_disregard > 0) {
             scx_disregard--;
             return;
         }
 
-        frame_buffer[ly_reg * GB_WIDTH + lx_reg] = dmg_colors[
-            get_palette_color(bgp_reg, p.palette_idx)];
+        if (!bg_win_enable())
+            bg_pixel.palette_idx = 0;
+        if (!obj_enable())
+            obj_pixel.palette_idx = 0;
+
+        /* Default -- Choose BG/WIN pixel if the object FIFO wasn't popped. */
+        int pick = 0;
+        if (obj_popped)
+        {
+            if (!bg_win_enable())
+                pick = 1;
+            else if (!obj_enable())
+                pick = 0;
+            else if (obj_pixel.priority == 1 && bg_pixel.palette_idx != 0)
+                pick = 0;
+            else if (obj_pixel.palette_idx == 0)
+                pick = 0;
+            else
+                pick = 1;
+        }
+
+        int color;
+        if (pick == 0) {
+            color = get_palette_color(bgp_reg, bg_pixel.palette_idx);
+        }
+        else {
+            color = get_palette_color(
+                (obj_pixel.palette == 0 ? obp0_reg : obp1_reg),
+                obj_pixel.palette_idx);
+        }
+
+        if (lx_reg < GB_WIDTH)
+            frame_buffer[ly_reg * GB_WIDTH + lx_reg] = dmg_colors[color];
 
         if (++lx_reg == GB_WIDTH) {
-            lx_reg = 0;
             //printf("Mode 3 length = %d\n", scanline_counter - 80 + 1);
             mode3_draw_complete = true;
         }
+        else
+            check_objs_lx();
     }
 }
 
@@ -312,9 +426,10 @@ void ppu_lcdc_write(byte val) {
         set_mode(LCD_DISABLED);
     }
     else if (lcd_enable() == 1 && prev_lcd_enable == 0) {
-        set_mode(MODE2_OAM);
+        just_enabled = true;
         scanline_counter = 0;
-        ly_reg = 0; lx_reg = 0;
+        ly_reg = 0;
+        set_mode(MODE2_OAM);
     }
 }
 
@@ -390,11 +505,11 @@ void ppu_wx_write(byte val) {
 
 /* */
 
-void fifo_clear(fifo *f) {
+static void fifo_clear(fifo *f) {
     f->head = 8;
 }
 
-bool fifo_pop(fifo *f, pixel *p)
+static bool fifo_pop(fifo *f, pixel *p)
 {
     if (f->head == 8)
         return false;
@@ -403,7 +518,7 @@ bool fifo_pop(fifo *f, pixel *p)
     return true;
 }
 
-bool bg_fifo_fill(pixel *p)
+static bool bg_fifo_fill(pixel *p)
 {
     if (bg_fifo.head != 8)
         return false;
@@ -413,14 +528,33 @@ bool bg_fifo_fill(pixel *p)
     return true;
 }
 
-/* */
+static bool obj_fifo_fill(pixel *p)
+{
+    /* Merge. */
+    int j = 0;
+    while (j < 8) {
+        pixel new = p[j];
+        pixel old;
+        if ((fifo_pop(&obj_fifo, &old) && old.palette_idx != 0))
+            obj_fifo.pixels[j] = old;
+        else
+            obj_fifo.pixels[j] = new;
 
-void fetcher_clear(fetcher *f) {
-    f->dot = 0;
-    f->fetch_x = 0;
+        j++;
+    }
+
+    obj_fifo.head = 0;
+    return true;
 }
 
-void bg_fetcher_dot()
+/* */
+
+static void fetcher_clear(fetcher *f) {
+    f->dot = 0;
+    f->fetch_x = 0xF8;
+}
+
+static void bg_fetcher_dot()
 {
     switch (bg_fetcher.dot) {
         /* Get tile ID. */
@@ -477,10 +611,97 @@ void bg_fetcher_dot()
             bg_fetcher.dot++;
         case 7:
             if (bg_fifo_fill(bg_fetcher.pixels)) {
-                if (first_fetch_disregard == 0)
-                    bg_fetcher.fetch_x += 8;
+                bg_fetcher.fetch_x += 8;
                 bg_fetcher.dot = 0;
             }
             break;
+    }
+}
+
+static byte flip_bits(byte b) {
+    byte flipped = 0;
+    for (int i = 0; i < 8; i++)
+        flipped |= ((b >> i) & 0x1) << (7 - i);
+    return flipped;
+}
+static void obj_fetcher_dot()
+{
+    switch (obj_fetcher.dot) {
+        /* Get tile ID. */
+        case 0:
+            obj_fetcher.tile_id = bus_read_ppu(fetch_obj.addr + 2);
+            obj_fetcher.dot++;
+            break;
+        case 1:
+            obj_fetcher.attributes = bus_read_ppu(fetch_obj.addr + 3);
+            if (obj_size() == 1) {
+                /* Default -- First tile of 8 x 16 object. */
+                bit override = 0;
+                if (ly_reg >= fetch_obj.obj_y - 8)
+                    /* Second tile of 8 x 16 object. */
+                    override = 1;
+                if (get_bit(obj_fetcher.attributes, 6) == 1)
+                    override = !override;
+                obj_fetcher.tile_id = set_bit(obj_fetcher.tile_id, 0, override);
+            }
+            obj_fetcher.dot++;
+            break;
+        /* Get tile data (low). */
+        case 2:
+            byte data_line = (byte)(ly_reg - fetch_obj.obj_y) % 8;
+            if (get_bit(obj_fetcher.attributes, 6))
+                data_line = (~data_line) & 0x7;
+            obj_fetcher.data_addr = (
+                0x8000                               |
+                ((uint16_t)obj_fetcher.tile_id << 4) |
+                ((uint16_t)data_line           << 1));
+            obj_fetcher.dot++;
+            break;
+        case 3:
+            obj_fetcher.data_lo = bus_read_ppu(obj_fetcher.data_addr);
+            if (get_bit(obj_fetcher.attributes, 5))
+                obj_fetcher.data_lo = flip_bits(obj_fetcher.data_lo);
+            obj_fetcher.dot++;
+            break;
+        /* Get tile data (high). */
+        case 4:
+            obj_fetcher.data_addr += 1;
+            obj_fetcher.dot++;
+            break;
+        case 5:
+            obj_fetcher.data_hi = bus_read_ppu(obj_fetcher.data_addr);
+            if (get_bit(obj_fetcher.attributes, 5))
+                obj_fetcher.data_hi = flip_bits(obj_fetcher.data_hi);
+            obj_fetcher.dot++;
+            break;
+        /* Push. */
+        case 6:
+            for (int i = 0; i < 8; i++) {
+                int idx = 7 - i;
+                pixel p;
+                p.palette_idx = (
+                    (int)get_bit(obj_fetcher.data_hi, idx) << 1) |
+                    (int)get_bit(obj_fetcher.data_lo, idx);
+                p.palette = get_bit(obj_fetcher.attributes, 4);
+                p.priority = get_bit(obj_fetcher.attributes, 7);
+                obj_fetcher.pixels[i] = p;
+            }
+            obj_fifo_fill(obj_fetcher.pixels);
+            obj_fetcher.dot = 0;
+            need_to_fetch_obj = false;
+            break;
+    }
+}
+
+static void check_objs_lx()
+{
+    need_to_fetch_obj = false;
+    for (int i = 0; i < scanline_objs_count; i++) {
+        obj_slot_type obj_slot = scanline_objs[i];
+        if ((byte)(lx_reg + 8) == obj_slot.obj_x) {
+            need_to_fetch_obj = true;
+            fetch_obj = obj_slot;
+            break;
+        }
     }
 }

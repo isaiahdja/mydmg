@@ -12,12 +12,6 @@
 
 /* Memory bus -- 16-bit address bus, 8-bit data bus. */
 
-/* TODO: Refactor IO using array of register descriptors (?) */
-static byte io_read(uint16_t addr);
-static void io_write(uint16_t addr, byte val);
-static inline uint16_t map_echo_to_wram(uint16_t addr);
-
-
 typedef enum {
     EXT_BUS,
     VRAM_BUS,
@@ -26,6 +20,11 @@ typedef enum {
 } bus_type;
 static bus_type dma_read_bus;
 static byte dma_read_val;
+
+/* TODO: Refactor IO using array of register descriptors (?) */
+static byte io_read(uint16_t addr);
+static void io_write(uint16_t addr, byte val);
+static inline uint16_t map_echo_to_wram(uint16_t addr);
 
 /* For the CPU - (Attempt to) read memory at addr. */
 byte bus_read_cpu(uint16_t addr)
@@ -183,8 +182,8 @@ byte bus_read_ppu(uint16_t addr)
     if (dma_conflict) {
 #ifdef DEBUG
         printf("DMA conflict for PPU memory read!\n");
-        val = region == OAM ? 0xFF : dma_read_bus;
 #endif
+        val = region == OAM ? 0xFF : dma_read_bus;
     }
 
     return val;

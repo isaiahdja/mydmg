@@ -39,10 +39,11 @@ int main(int argc, char *argv[])
     window_height = GB_HEIGHT * scale_factor;
     SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, 0,
         &window, &renderer);
-    if (!SDL_SetRenderVSync(renderer, 1))
-        SDL_Log("Could not initialize renderer with VSync");
     if (window == NULL || renderer == NULL)
         goto failure;
+    if (!SDL_SetRenderVSync(renderer, 1))
+        SDL_Log("Could not initialize renderer with VSync");
+    
     window_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
             SDL_TEXTUREACCESS_STREAMING, GB_WIDTH, GB_HEIGHT);
     if (window_tex == NULL)

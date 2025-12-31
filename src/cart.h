@@ -2,8 +2,10 @@
 #include "byte.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 extern byte *cart_rom;
+extern size_t cart_rom_size;
 extern uint32_t rom_banks;
 
 bool cart_init(const char *rom_path);

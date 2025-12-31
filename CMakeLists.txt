@@ -37,5 +37,16 @@ target_compile_definitions(mydmg PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
 )
 target_compile_options(mydmg PRIVATE
-    $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic>
+    $<$<CONFIG:Debug>:
+        -Wall -Wextra -Wpedantic
+        -O0
+        -g
+        -fno-omit-frame-pointer
+        -fsanitize=address,undefined
+    >
+)
+target_link_options(mydmg PRIVATE
+    $<$<CONFIG:Debug>:
+        -fsanitize=address,undefined
+    >
 )
