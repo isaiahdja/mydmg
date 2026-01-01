@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
         goto failure;
 
     if (argc < 2) {
-        SDL_Log("Usage: %s [ROM PATH]", argv[0]);
+        SDL_Log("Usage: %s [path to ROM file]", argv[0]);
         SDL_SetError("Missing ROM path");
         goto failure;
     }

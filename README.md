@@ -1,7 +1,9 @@
 
 # MyDMG
 
-MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C. 
+![Kirby's Dream Land gameplay](img/kirby.gif)
+
+MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.  
 It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD display controller).
 
 ## Building
@@ -14,7 +16,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 
 ## Running
 
-    ./mydmg [ROM PATH]
+    ./mydmg [path to ROM file]
 
 ## Default controls
 
@@ -48,6 +50,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - User customization options and other extra features, e.g.:
     - Configurable window scaling, controls, mono palette, etc.
     - Save states
+- Debug window to view registers and memory, with single-stepping capability
 - Refactoring to reduce copied / boilerplate code
 - Serial (link-cable) data transfer support
 
@@ -61,7 +64,27 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - Memory-mapped I/O
 - Direct memory access (DMA) mechanism for transferring object attribute memory
 
+### Testing
+
+- [SM83 SingleStepTests](https://github.com/SingleStepTests/sm83)
+    - CPU logic is compiled as its own library for unit testing
+    - Python script using ctypes runs the tests by loading the initial state from JSON, ticking the CPU by the requisite number of cycles, and comparing the final state
+- [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
+- [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/gb-test-roms)
+- [dmg-acid2](https://github.com/mattcurrie/dmg-acid2)
+
+### Resources
+
+- [Pan Docs](https://gbdev.io/pandocs/About.html)
+- [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)
+- [gbops opcode table](https://izik1.github.io/gbops/index.html)
+- [Game Boy CPU Internals](https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595)
+- [Demystifying the GameBoy/SM83’s DAA Instruction](https://blog.ollien.com/posts/gb-daa/)
+- [Game Boy carry and half-carry flags](https://gist.github.com/meganesu/9e228b6b587decc783aa9be34ae27841)
+- [Rendering Internals (Pan Docs fork)](https://github.com/ISSOtm/pandocs/blob/rendering-internals/src/Rendering_Internals.md) 
+- [Rewriting My Game Boy Emulator: The Pixel FIFO](https://jsgroth.dev/blog/posts/gb-rewrite-pixel-fifo/)
+
 ## Disclaimer
 
-This project was created as a learning exercise, and is not primarily intended to serve as a recreational tool.
+This project was created as a learning exercise, and is not primarily intended to serve as an end-user product.  
 "Game Boy" is a registered trademark of Nintendo of America, Inc.
