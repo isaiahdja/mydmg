@@ -1,10 +1,10 @@
 
 # MyDMG
 
-![Kirby's Dream Land gameplay](img/kirby.gif)
-
 MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.  
 It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD display controller).
+
+![Kirby's Dream Land gameplay](img/kirby.gif)
 
 ## Building
 
@@ -72,6 +72,8 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
 - [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/gb-test-roms)
 - [dmg-acid2](https://github.com/mattcurrie/dmg-acid2)
+
+MyDMG has been built for the Windows Subsytem for Linux (WSL2) with GCC, and Windows 11 with MSVC.
 
 ### Resources
 
