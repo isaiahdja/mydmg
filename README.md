@@ -64,7 +64,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - Memory-mapped I/O
 - Direct memory access (DMA) mechanism for transferring object attribute memory
 
-### Testing
+## Testing
 
 - [SM83 SingleStepTests](https://github.com/SingleStepTests/sm83)
     - CPU logic is compiled as its own library for unit testing
@@ -75,7 +75,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 
 MyDMG has been built for the Windows Subsytem for Linux (WSL2) with GCC, and Windows 11 with MSVC.
 
-### Resources
+## Resources
 
 - [Pan Docs](https://gbdev.io/pandocs/About.html)
 - [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)
