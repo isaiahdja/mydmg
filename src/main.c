@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
     scale_factor = 3;
     window_width = GB_WIDTH * scale_factor;
     window_height = GB_HEIGHT * scale_factor;
-    SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, 0,
+    SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, SDL_WINDOW_OPENGL,
         &window, &renderer);
     if (window == NULL || renderer == NULL)
         goto failure;
@@ -66,6 +66,7 @@ int main(int argc, char *argv[])
     SDL_Quit();
     return 0;
 failure:
+    /* TODO: Show message box (?) */
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
     if (window != NULL)
         SDL_DestroyWindow(window);
@@ -99,9 +100,9 @@ static void loop()
             Uint64 nanos_delay = secs_delay * 1e9;
             SDL_DelayPrecise(nanos_delay);
         }
-        else
-            SDL_LogCritical(
-                SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target by %lf seconds", -secs_delay);
+        else {
+            //SDL_LogCritical(SDL_LOG_CATEGORY_SYSTEM, "Frame took longer than target by %lf seconds", -secs_delay);
+        }
     }
 }
 

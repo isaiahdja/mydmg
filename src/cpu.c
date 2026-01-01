@@ -115,6 +115,7 @@ void cpu_tick(void)
     if (halted) {
         if (pending_int()) {
             halted = false;
+            cb_prefixed = false;
             instr_func = &nop;
         }
         else
@@ -653,11 +654,9 @@ static void stop()
 }
 static void halt()
 {
-/*
 #ifdef DEBUG
-    printf("HALT\n");
+    //printf("HALT\n");
 #endif
-*/
     halted = true;
     instr_complete = true;
 }

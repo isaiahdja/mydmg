@@ -34,9 +34,23 @@ bool timer_init(void)
     tima_reg = 0x00, tma_reg = 0x00, tac_reg = 0xF8;
     update_tac_caches();
 
-    system_counter = 0;
+    system_counter = 0xEAF3;
 
     return true;
+}
+
+static void check_signal(void) {
+    bit next_timer_signal =
+        get_bit(system_counter, tac_counter_bit_idx) & tac_enable;
+    if (next_timer_signal == 0 && prev_timer_signal == 1) {
+        if (++tima_reg == 0x00) {
+            /* Timer overflow.
+            We load the current value of TMA to TIMA on the *next* M-cycle. */
+            timer_overflowed = true;
+            tma_overflow_save = tma_reg;
+        }
+    }
+    prev_timer_signal = next_timer_signal;
 }
 
 void timer_tick(void)
@@ -50,23 +64,13 @@ void timer_tick(void)
         request_interrupt(INT_TIMER);
     }
 
-    int next_timer_signal =
-        get_bit(system_counter, tac_counter_bit_idx) & tac_enable;
-    if (detect_falling_edge(prev_timer_signal, next_timer_signal)) {
-        if (++tima_reg == 0) {
-            /* Timer overflow.
-            We load the current value of TMA to TIMA on the *next* M-cycle. */
-            timer_overflowed = true;
-            tma_overflow_save = tma_reg;
-        }
-    }
-    prev_timer_signal = next_timer_signal;
+    check_signal();
 }
 
 static void update_tac_caches()
 {
     /* For the enable bit, 0 = disabled, 1 = enabled. */
-    tac_enable = get_bit(tac_reg, 2) == 1;
+    tac_enable = get_bit(tac_reg, 2);
     switch (get_bits(tac_reg, 1, 0)) {
         case 0x0: tac_counter_bit_idx = 9; break; /* 2^12 Hz | 256 M-cycles */
         case 0x1: tac_counter_bit_idx = 3; break; /* 2^18 Hz |   4 M-cycles */
@@ -80,6 +84,7 @@ byte timer_div_read() {
 }
 void timer_div_write(byte val) {
     system_counter = 0;
+    check_signal();
 }
 
 byte timer_tima_read() {
@@ -102,4 +107,5 @@ byte timer_tac_read() {
 void timer_tac_write(byte val) {
     tac_reg = overlay_masked(tac_reg, val, TAC_RW_MASK);
     update_tac_caches();
+    check_signal();
 }

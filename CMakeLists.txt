@@ -27,9 +27,6 @@ add_executable(mydmg
     src/interrupt.c
     src/input.c
     src/dma.c
-
-    src/mbc/mbc0.c
-    src/mbc/mbc1.c
 )
 target_include_directories(mydmg PRIVATE src)
 target_link_libraries(mydmg PRIVATE SDL3::SDL3)
@@ -39,10 +36,13 @@ target_compile_definitions(mydmg PRIVATE
 target_compile_options(mydmg PRIVATE
     $<$<CONFIG:Debug>:
         -Wall -Wextra -Wpedantic
-        -O0
+        -Og
         -g
         -fno-omit-frame-pointer
         -fsanitize=address,undefined
+    >
+    $<$<CONFIG:Release>:
+        -O3
     >
 )
 target_link_options(mydmg PRIVATE

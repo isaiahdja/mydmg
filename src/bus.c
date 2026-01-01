@@ -82,14 +82,14 @@ byte bus_read_cpu(uint16_t addr)
     
     if (ppu_conflict) {
 #ifdef DEBUG
-        printf("PPU conflict for CPU memory read!\n");
+        //printf("PPU conflict for CPU memory read!\n");
 #endif
         val = 0xFF;
     }
 
     if (dma_conflict) {
 #ifdef DEBUG
-        printf("DMA conflict for CPU memory read!\n");
+        //printf("DMA conflict for CPU memory read!\n");
 #endif
         val = region == OAM ? 0xFF : dma_read_val;
     }
@@ -151,10 +151,12 @@ void bus_write_cpu(uint16_t addr, byte val)
     }
 
 #ifdef DEBUG
-    if (ppu_conflict)
-        printf("PPU conflict for CPU memory write!\n");
-    if (dma_conflict)
-        printf("DMA conflict for CPU memory write!\n");
+    if (ppu_conflict) {
+        //printf("PPU conflict for CPU memory write!\n");
+    }
+    if (dma_conflict) {
+        //printf("DMA conflict for CPU memory write!\n");
+    }
 #endif
 }
 
@@ -181,7 +183,7 @@ byte bus_read_ppu(uint16_t addr)
 
     if (dma_conflict) {
 #ifdef DEBUG
-        printf("DMA conflict for PPU memory read!\n");
+        //printf("DMA conflict for PPU memory read!\n");
 #endif
         val = region == OAM ? 0xFF : dma_read_bus;
     }
@@ -214,7 +216,7 @@ void bus_copy_dma(uint16_t src, uint16_t dst)
             break;
 #ifdef DEBUG
         default:
-            printf("DMA read source in undefined region\n");
+            //printf("DMA read source in undefined region\n");
             break;
 #endif
     }

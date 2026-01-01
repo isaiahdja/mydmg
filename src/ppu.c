@@ -55,6 +55,7 @@ static inline bit mode0_int_select(void) {
     return get_bit(stat_reg, 3);
 }
 static bit prev_stat_int_signal = 0;
+static bit prev_vblank_int_signal = 0;
 
 static byte scy_reg, scx_reg;
 static byte ly_reg, lyc_reg;
@@ -68,17 +69,16 @@ static inline int get_palette_color(byte palette, int idx) {
 static byte wy_reg, wx_reg;
 
 static uint32_t dmg_colors[4] = {
-    0xFF89C177, /* 100% */
-    0xFF4DA350, /*  66% */
-    0xFF36774A, /*  33% */
-    0xFF224939  /*   0% */
+    0xFF9a9e3f, /* 100% */
+    0xFF496b22, /*  66% */
+    0xFF0e450b, /*  33% */
+    0xFF1b2a09  /*   0% */
 };
 static uint32_t frame_buffer[GB_HEIGHT * GB_WIDTH];
 static uint32_t off_buffer[GB_HEIGHT * GB_WIDTH];
 
-static void set_mode(ppu_mode _mode);
 static ppu_mode mode;
-static bit prev_vblank_int_signal = 0;
+static void set_mode(ppu_mode _mode);
 
 #define T_CYCLES_PER_SCANLINE 456
 #define SCANLINES_PER_FRAME 154
@@ -116,16 +116,13 @@ typedef struct {
     bit palette;
     bit priority;
 } pixel;
-
 typedef struct {
     pixel pixels[8];
     int head;
 } fifo;
 
 static fifo bg_fifo;
-
 static fifo obj_fifo;
-
 static void fifo_clear(fifo *f);
 static bool fifo_pop(fifo *f, pixel *p);
 static bool bg_fifo_fill(pixel *p);
@@ -140,26 +137,25 @@ typedef struct {
     byte data_lo;
     byte data_hi;
     pixel pixels[8];
-
-    /* BG/WIN only. */
-    byte fetch_x;
-    uint16_t id_addr;
-
-    /* OBJ only. */
-    byte attributes;
 } fetcher;
 
-static int first_fetch_disregard;
+static byte bg_fetch_x;
+static uint16_t bg_id_addr;
 static int scx_disregard;
+static bool wy_check;
+static bool window_mode;
+static byte win_x, win_y;
 static fetcher bg_fetcher;
+static void check_win_lx(void);
 
 bool need_to_fetch_obj;
 static obj_slot_type fetch_obj;
+static byte obj_fetch_attribs;
 static fetcher obj_fetcher;
+static void check_objs_lx(void);
 
 static void fetcher_clear(fetcher *f);
 static void bg_fetcher_dot(void);
-static void check_objs_lx(void);
 static void obj_fetcher_dot(void);
 
 bool ppu_init(void)
@@ -176,9 +172,8 @@ bool ppu_init(void)
     wy_reg = 0x00, wx_reg = 0x00;
 
     scanline_counter = 0;
-    /* TODO: Change blank LCD color. */
     for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++)
-        off_buffer[i] = dmg_colors[0];
+        off_buffer[i] = dmg_colors[0] + 0x00050505;
 
     return true;
 }
@@ -208,10 +203,13 @@ void ppu_tick(void)
         if (++scanline_counter == T_CYCLES_PER_SCANLINE) {
             /* Begin new scanline. */
             scanline_counter = 0;
+            if (window_mode)
+                win_y++;
             if (++ly_reg == SCANLINES_PER_FRAME) {
                 /* Begin new frame. */
                 just_enabled = false;
                 ly_reg = 0;
+                win_y = 0;
             }
             
             if (ly_reg >= GB_HEIGHT)
@@ -219,12 +217,10 @@ void ppu_tick(void)
             else
                 set_mode(MODE2_OAM);
         }
-        else if (mode == MODE2_OAM && scanline_counter == MODE2_OAM_T_CYCLES) {
+        else if (mode == MODE2_OAM && scanline_counter == MODE2_OAM_T_CYCLES)
             set_mode(MODE3_DRAW);
-        }
-        else if (mode == MODE3_DRAW && mode3_draw_complete) {
+        else if (mode == MODE3_DRAW && mode3_draw_complete)
             set_mode(MODE0_HBLANK);
-        }
     }
 
     /* We can check for interrupts every M-cycle as that is how the rest of the
@@ -276,11 +272,13 @@ static void set_mode(ppu_mode _mode) {
             scanline_objs_count = 0;
             mode2_addr = OAM_START;
             mode2_cycle = CHECK;
+            wy_check = ly_reg >= wy_reg;
             break;
         case MODE3_DRAW:
-            lx_reg = 0xF8;
+            lx_reg = 0xF8; bg_fetch_x = 0xF8;
             fifo_clear(&bg_fifo); fetcher_clear(&bg_fetcher);
             fifo_clear(&obj_fifo); fetcher_clear(&obj_fetcher);
+            window_mode = false; win_x = 0; check_win_lx();
             scx_disregard = scx_reg % 8;
             check_objs_lx();
             mode3_draw_complete = false;
@@ -372,7 +370,7 @@ static void mode3_dot()
             return;
         }
 
-        if (!bg_win_enable())
+        if (!bg_win_enable() || (window_mode && !win_enable()))
             bg_pixel.palette_idx = 0;
         if (!obj_enable())
             obj_pixel.palette_idx = 0;
@@ -410,8 +408,10 @@ static void mode3_dot()
             //printf("Mode 3 length = %d\n", scanline_counter - 80 + 1);
             mode3_draw_complete = true;
         }
-        else
+        else {
             check_objs_lx();
+            check_win_lx();
+        }
     }
 }
 
@@ -549,20 +549,51 @@ static bool obj_fifo_fill(pixel *p)
 
 /* */
 
-static void fetcher_clear(fetcher *f) {
-    f->dot = 0;
-    f->fetch_x = 0xF8;
+static void check_win_lx() {
+    if (!window_mode && bg_win_enable() && win_enable() && wy_check && lx_reg + 7 == wx_reg) {
+        fifo_clear(&bg_fifo); fetcher_clear(&bg_fetcher);
+        window_mode = true;
+    }
 }
 
+static void fetcher_clear(fetcher *f) {
+    f->dot = 0;
+}
+
+static void check_objs_lx()
+{
+    need_to_fetch_obj = false;
+    for (int i = 0; i < scanline_objs_count; i++) {
+        obj_slot_type obj_slot = scanline_objs[i];
+        if ((byte)(lx_reg + 8) == obj_slot.obj_x) {
+            need_to_fetch_obj = true;
+            fetch_obj = obj_slot;
+            break;
+        }
+    }
+}
+
+/* TODO: Implement slice fetcher "stealing." */
 static void bg_fetcher_dot()
 {
     switch (bg_fetcher.dot) {
         /* Get tile ID. */
         case 0:
-            bit map_area = bg_map_area();
-            byte tile_y = (byte)(ly_reg + scy_reg) / 8;
-            byte tile_x = (byte)(bg_fetcher.fetch_x + scx_reg) / 8;
-            bg_fetcher.id_addr = (
+            bit map_area;
+            byte tile_y;
+            byte tile_x;
+            if (!window_mode) {
+                map_area = bg_map_area();
+                tile_y = (byte)(ly_reg + scy_reg) / 8;
+                tile_x = (byte)(bg_fetch_x + scx_reg) / 8;
+            }
+            else {
+                map_area = win_map_area();
+                tile_y = win_y / 8;
+                tile_x = win_x / 8;
+            }
+
+            bg_id_addr = (
                 0x9800                     |
                 ((uint16_t)map_area << 10) |
                 ((uint16_t)tile_y   <<  5) |
@@ -570,14 +601,20 @@ static void bg_fetcher_dot()
             bg_fetcher.dot++;
             break;
         case 1:
-            bg_fetcher.tile_id = bus_read_ppu(bg_fetcher.id_addr);
+            bg_fetcher.tile_id = bus_read_ppu(bg_id_addr);
             bg_fetcher.dot++;
             break;
         /* Get tile data (low). */
         case 2:
             bit addr_mode = (bg_win_data_area() == 1 ?
-                0 : !(get_bit(bg_fetcher.tile_id, 7)));
-            byte data_line = (byte)(ly_reg + scy_reg) % 8;
+                    0 : !(get_bit(bg_fetcher.tile_id, 7)));
+            byte data_line;
+
+            if (!window_mode)
+                data_line = (byte)(ly_reg + scy_reg) % 8;
+            else
+                data_line = win_y % 8;
+
             bg_fetcher.data_addr = (
                 0x8000                               |
                 ((uint16_t)addr_mode          << 12) |
@@ -611,7 +648,9 @@ static void bg_fetcher_dot()
             bg_fetcher.dot++;
         case 7:
             if (bg_fifo_fill(bg_fetcher.pixels)) {
-                bg_fetcher.fetch_x += 8;
+                bg_fetch_x += 8;
+                if (window_mode)
+                    win_x += 8;
                 bg_fetcher.dot = 0;
             }
             break;
@@ -633,14 +672,14 @@ static void obj_fetcher_dot()
             obj_fetcher.dot++;
             break;
         case 1:
-            obj_fetcher.attributes = bus_read_ppu(fetch_obj.addr + 3);
+            obj_fetch_attribs = bus_read_ppu(fetch_obj.addr + 3);
             if (obj_size() == 1) {
                 /* Default -- First tile of 8 x 16 object. */
                 bit override = 0;
                 if (ly_reg >= fetch_obj.obj_y - 8)
                     /* Second tile of 8 x 16 object. */
                     override = 1;
-                if (get_bit(obj_fetcher.attributes, 6) == 1)
+                if (get_bit(obj_fetch_attribs, 6) == 1)
                     override = !override;
                 obj_fetcher.tile_id = set_bit(obj_fetcher.tile_id, 0, override);
             }
@@ -649,7 +688,7 @@ static void obj_fetcher_dot()
         /* Get tile data (low). */
         case 2:
             byte data_line = (byte)(ly_reg - fetch_obj.obj_y) % 8;
-            if (get_bit(obj_fetcher.attributes, 6))
+            if (get_bit(obj_fetch_attribs, 6))
                 data_line = (~data_line) & 0x7;
             obj_fetcher.data_addr = (
                 0x8000                               |
@@ -659,7 +698,7 @@ static void obj_fetcher_dot()
             break;
         case 3:
             obj_fetcher.data_lo = bus_read_ppu(obj_fetcher.data_addr);
-            if (get_bit(obj_fetcher.attributes, 5))
+            if (get_bit(obj_fetch_attribs, 5))
                 obj_fetcher.data_lo = flip_bits(obj_fetcher.data_lo);
             obj_fetcher.dot++;
             break;
@@ -670,7 +709,7 @@ static void obj_fetcher_dot()
             break;
         case 5:
             obj_fetcher.data_hi = bus_read_ppu(obj_fetcher.data_addr);
-            if (get_bit(obj_fetcher.attributes, 5))
+            if (get_bit(obj_fetch_attribs, 5))
                 obj_fetcher.data_hi = flip_bits(obj_fetcher.data_hi);
             obj_fetcher.dot++;
             break;
@@ -682,26 +721,13 @@ static void obj_fetcher_dot()
                 p.palette_idx = (
                     (int)get_bit(obj_fetcher.data_hi, idx) << 1) |
                     (int)get_bit(obj_fetcher.data_lo, idx);
-                p.palette = get_bit(obj_fetcher.attributes, 4);
-                p.priority = get_bit(obj_fetcher.attributes, 7);
+                p.palette = get_bit(obj_fetch_attribs, 4);
+                p.priority = get_bit(obj_fetch_attribs, 7);
                 obj_fetcher.pixels[i] = p;
             }
             obj_fifo_fill(obj_fetcher.pixels);
             obj_fetcher.dot = 0;
             need_to_fetch_obj = false;
             break;
-    }
-}
-
-static void check_objs_lx()
-{
-    need_to_fetch_obj = false;
-    for (int i = 0; i < scanline_objs_count; i++) {
-        obj_slot_type obj_slot = scanline_objs[i];
-        if ((byte)(lx_reg + 8) == obj_slot.obj_x) {
-            need_to_fetch_obj = true;
-            fetch_obj = obj_slot;
-            break;
-        }
     }
 }
