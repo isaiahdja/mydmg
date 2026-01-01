@@ -1,6 +1,6 @@
 cpu_instrs/cpu_instrs.gb         | PASSED | 12/29/2025 |
-instr_timing/instr_timing.gb     | ERROR  | 12/29/2025 | Nothing on screen (?)
-interrupt_time/interrupt_time.gb |        |            | Requires MBC1 + RAM (#define REQUIRE_CGB 1 ?)
+instr_timing/instr_timing.gb     | PASSED | 12/30/2025 |
+interrupt_time/interrupt_time.gb | ERROR  |            | (#define REQUIRE_CGB 1 ?)
 mem_timing/mem_timing.gb         | PASSED | 12/29/2025 |
-mem_timing-2/mem_timing.gb       |        |            | Requires MBC1 + RAM + BATTERY
-halt_bug.gb                      | ERROR  | 12/29/2025 | Requires MBC1 + RAM
+mem_timing-2/mem_timing.gb       | PASSED | 12/30/2025 |
+halt_bug.gb                      | ERROR  | 12/29/2025 |

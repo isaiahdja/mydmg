@@ -112,6 +112,8 @@ bool cpu_init(void)
 
 void cpu_tick(void)
 {
+    if (cb_prefixed && instr_func != &nop)
+        cb_prefixed = false;
     if (halted) {
         if (pending_int()) {
             halted = false;
@@ -1852,8 +1854,8 @@ static void fetch_and_decode()
     int b_7_6 = get_bits(instr_reg, 7, 6);
     int b_2_0 = get_bits(instr_reg, 2, 0);
     if (cb_prefixed) {
-#pragma region
         cb_prefixed = false;
+#pragma region
         int b_7_3 = get_bits(instr_reg, 7, 3);
         if (b_7_3 == 0) {
             if (instr_reg == 0x06)
