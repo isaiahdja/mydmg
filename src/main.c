@@ -118,6 +118,23 @@ static void run_frame()
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 running = false;
                 break;
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.scancode == SDL_SCANCODE_EQUALS) {
+                    scale_factor++;
+                    window_width = scale_factor * GB_WIDTH;
+                    window_height = scale_factor * GB_HEIGHT;
+                    SDL_SetWindowSize(window, window_width, window_height);
+                }
+                else if (event.key.scancode == SDL_SCANCODE_MINUS) {
+                    if (scale_factor > 1)
+                        scale_factor--;
+                    else
+                        break;
+                    window_width = scale_factor * GB_WIDTH;
+                    window_height = scale_factor * GB_HEIGHT;
+                    SDL_SetWindowSize(window, window_width, window_height);
+                }
+                break;
         }
     }
 }
