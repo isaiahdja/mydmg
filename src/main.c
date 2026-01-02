@@ -2,7 +2,6 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include "system.h"
-#include "cart.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,10 +29,10 @@ static inline SDL_Color color_from_hex(uint32_t hex) {
     };
 }
 
+SDL_Mutex *frame_mux;
 static bool running = true;
 
 static SDL_Thread *system_thread;
-static SDL_Semaphore *frame_sema;
 static void loop_window(void);
 static int loop_system(void* data);
 
@@ -95,19 +94,21 @@ int main(int argc, char *argv[])
     SDL_Log("Debug build");
 #endif
 
-    if (!sys_init() || !cart_init(argv[1]))
+    frame_mux = SDL_CreateMutex();
+    system_args sys_args  = (system_args){ argv[1], frame_mux };
+    if (!sys_init(sys_args))
         goto failure;
-    frame_sema = SDL_CreateSemaphore(0);
     system_thread = SDL_CreateThread(&loop_system, "System", NULL);
     loop_window();
     SDL_WaitThread(system_thread, NULL);
-
-    cart_deinit();
+    sys_deinit();
+    
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(window_tex);
     for (int i = 0; i < NUM_PALETTES; i++)
         SDL_DestroyPalette(palettes[i]);
+    SDL_DestroyMutex(frame_mux);
     SDL_Quit();
     return 0;
 failure:
@@ -128,9 +129,10 @@ static void loop_window()
 {
     /* Main loop. */
     while (running) {
-        SDL_WaitSemaphore(frame_sema);
         SDL_RenderClear(renderer);
+        SDL_LockMutex(frame_mux);
         SDL_UpdateTexture(window_tex, NULL, sys_get_frame_buffer(), GB_WIDTH);
+        SDL_UnlockMutex(frame_mux);
         SDL_RenderTexture(renderer, window_tex, NULL, NULL);
         SDL_RenderPresent(renderer);
 
@@ -167,7 +169,6 @@ static int loop_system(void* data)
         sys_start_frame();
         for (int i = 0; i < M_CYCLES_PER_FRAME; i++)
             sys_tick();
-        SDL_SignalSemaphore(frame_sema);
 
         Uint64 now = SDL_GetPerformanceCounter();
         Sint64 delta = (Sint64)(next_frame - now);

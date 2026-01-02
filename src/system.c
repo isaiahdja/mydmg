@@ -6,18 +6,20 @@
 #include "ppu.h"
 #include "input.h"
 #include "dma.h"
+#include "cart.h"
 
 /* Work RAM. */
 static byte wram[WRAM_SIZE];
 
-bool sys_init()
+bool sys_init(system_args args)
 {
     /* TODO: Ordering (?) */
     return (
+        cart_init(args.rom_path) &&
         timer_init() &&
         cpu_init() &&
         interrupt_init() &&
-        ppu_init() &&
+        ppu_init(args.frame_mux) &&
         input_init() &&
         dma_init()
     );
@@ -35,6 +37,11 @@ void sys_tick()
 void sys_start_frame()
 {
     input_poll_and_load();
+}
+
+void sys_deinit()
+{
+    cart_deinit();
 }
 
 uint8_t *sys_get_frame_buffer() {

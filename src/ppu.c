@@ -71,8 +71,11 @@ static byte wy_reg, wx_reg;
 static uint8_t frame_buffer[GB_HEIGHT * GB_WIDTH];
 static uint8_t front_buffer[GB_HEIGHT * GB_WIDTH];
 static uint8_t off_buffer[GB_HEIGHT * GB_WIDTH];
+static SDL_Mutex *frame_mux;
 static inline void commit_frame(void) {
+    SDL_LockMutex(frame_mux);
     memcpy(front_buffer, frame_buffer, sizeof(front_buffer));
+    SDL_UnlockMutex(frame_mux);
 }
 
 static ppu_mode mode;
@@ -156,7 +159,7 @@ static void fetcher_clear(fetcher *f);
 static void bg_fetcher_dot(void);
 static void obj_fetcher_dot(void);
 
-bool ppu_init(void)
+bool ppu_init(SDL_Mutex *_frame_mux)
 {
     /* DMG boot handoff state. */
     lcdc_reg = 0x91;
@@ -172,6 +175,8 @@ bool ppu_init(void)
     scanline_counter = 0;
     for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++)
         off_buffer[i] = 4;
+
+    frame_mux = _frame_mux;
 
     return true;
 }

@@ -47,7 +47,6 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - Further debugging and general accuracy improvements
 - Audio support
 - Additional MBC support
-- Performance optimizations
 - GUI with more customization options and other extra features, e.g.:
     - Configurable controls
     - Save states

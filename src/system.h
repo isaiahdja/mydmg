@@ -12,9 +12,15 @@
 #define T_M_RATIO 4
 #define M_CYCLES_PER_FRAME (T_CYCLES_PER_FRAME / T_M_RATIO)
 
-bool sys_init();
+typedef struct {
+    const char *rom_path;
+    SDL_Mutex *frame_mux;
+} system_args;
+
+bool sys_init(system_args args);
 void sys_tick(void);
 void sys_start_frame(void);
+void sys_deinit(void);
 uint8_t *sys_get_frame_buffer(void);
 
 byte wram_read(uint16_t addr);

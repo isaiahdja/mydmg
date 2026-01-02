@@ -13,7 +13,7 @@ typedef enum {
     LCD_DISABLED
 } ppu_mode;
 
-bool ppu_init(void);
+bool ppu_init(SDL_Mutex *frame_mux);
 void ppu_tick(void);
 
 byte vram_read(uint16_t addr);
