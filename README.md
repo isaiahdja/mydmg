@@ -4,7 +4,7 @@
 MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.  
 It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD display controller).
 
-![Kirby's Dream Land gameplay](img/kirby.gif)
+https://github.com/user-attachments/assets/6fe36318-a972-4c59-bb6c-2aa8deb1ee4d
 
 ## Building
 
