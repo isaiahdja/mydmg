@@ -23,7 +23,7 @@ static uint16_t jump_vecs[NUM_INTERRUPTS] = {
     [INT_JOYPAD] = JUMP_VEC_JOYPAD
 };
 
-bool interrupt_init(void)
+bool int_init(void)
 {
     /* DMG boot handoff state. */
     if_reg = 0xE1, ie_reg = 0x00;
@@ -31,22 +31,22 @@ bool interrupt_init(void)
     return true;
 }
 
-byte interrupt_if_read() {
+byte int_if_read() {
     return if_reg;
 }
-void interrupt_if_write(byte val) {
+void int_if_write(byte val) {
     if_reg = overlay_masked(if_reg, val, IF_RW_MASK);
 }
 
-byte interrupt_ie_read() {
+byte int_ie_read() {
     return ie_reg;
 }
-void interrupt_ie_write(byte val) {
+void int_ie_write(byte val) {
     /* All bits are actually writable. */
     ie_reg = val;
 }
 
-bool interrupt_send_interrupt(uint16_t *jump_vec)
+bool int_send_interrupt(uint16_t *jump_vec)
 {
     for (int i = 0; i < NUM_INTERRUPTS; i++) {
         if ((get_bit(ie_reg, i) & get_bit(if_reg, i)) == 1) {
@@ -58,7 +58,7 @@ bool interrupt_send_interrupt(uint16_t *jump_vec)
     return false;
 }
 
-bool interrupt_pending() {
+bool pending_interrupt() {
     return (if_reg & ie_reg) != 0x00;
 }
 

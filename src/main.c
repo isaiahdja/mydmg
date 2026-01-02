@@ -28,43 +28,11 @@ static inline SDL_Color color_from_hex(uint32_t hex) {
         0xFF
     };
 }
-
-SDL_Mutex *frame_mux;
-static bool running = true;
-
-static SDL_Thread *system_thread;
-static void loop_window(void);
-static int loop_system(void* data);
-
-int main(int argc, char *argv[])
+static bool init_palettes()
 {
-    bool sdl_initialized = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
-    if (!sdl_initialized)
-        goto failure;
-
-    if (argc < 2) {
-        SDL_Log("Usage: %s [path to ROM file]", argv[0]);
-        SDL_SetError("Missing ROM path");
-        goto failure;
-    }
-
-    scale_factor = 4;
-    window_width = GB_WIDTH * scale_factor;
-    window_height = GB_HEIGHT * scale_factor;
-    SDL_CreateWindowAndRenderer("MyDMG", window_width, window_height, SDL_WINDOW_OPENGL,
-        &window, &renderer);
-    if (window == NULL || renderer == NULL)
-        goto failure;
-    if (!SDL_SetRenderVSync(renderer, 1))
-        SDL_Log("Could not initialize renderer with VSync");
-    
-    window_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_INDEX8,
-            SDL_TEXTUREACCESS_STREAMING, GB_WIDTH, GB_HEIGHT);
-    if (window_tex == NULL)
-        goto failure;
-    SDL_SetTextureScaleMode(window_tex, SDL_SCALEMODE_PIXELART);
-
     bw_palette = SDL_CreatePalette(5);
+    if (bw_palette == NULL)
+        return false;
     SDL_Color bw_colors[5] = {
         color_from_hex(0xE0E0E0),
         color_from_hex(0xB0B0B0),
@@ -72,10 +40,13 @@ int main(int argc, char *argv[])
         color_from_hex(0x303030),
         color_from_hex(0xF0F0F0)
     };
-    SDL_SetPaletteColors(bw_palette, bw_colors,0, 5);
+    if (!SDL_SetPaletteColors(bw_palette, bw_colors,0, 5))
+        return false;
     palettes[0] = bw_palette;
 
     olive_palette = SDL_CreatePalette(5);
+    if (olive_palette == NULL)
+        return false;
     SDL_Color olive_colors[5] = {
         color_from_hex(0x9CA142),
         color_from_hex(0x4C722B),
@@ -83,46 +54,90 @@ int main(int argc, char *argv[])
         color_from_hex(0x1F2F0F),
         color_from_hex(0xAAAF48)
     };
-    SDL_SetPaletteColors(olive_palette, olive_colors,0, 5);
+    if (!SDL_SetPaletteColors(olive_palette, olive_colors, 0, 5))
+        return false;
     palettes[1] = olive_palette;
 
-    active_palette = 0;
-    SDL_SetTexturePalette(window_tex, palettes[active_palette]);
+    return true;
+}
 
-#ifdef DEBUG
-    SDL_SetLogPriorities(SDL_LOG_PRIORITY_DEBUG);
-    SDL_Log("Debug build");
-#endif
+const char *rom_path;
+static bool running = true;
+
+SDL_Mutex *frame_mux;
+static SDL_Thread *system_thread;
+static void loop_window(void);
+static int loop_system(void* data);
+
+int main(int argc, char *argv[])
+{
+    int code = 0;
+
+    bool sdl_init = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS); 
+    if (!sdl_init) goto failure;
+    
+    scale_factor = 4;
+    window_width = GB_WIDTH * scale_factor;
+    window_height = GB_HEIGHT * scale_factor;
+    window = SDL_CreateWindow("MyDMG", window_width, window_height,
+        SDL_WINDOW_KEYBOARD_GRABBED);
+    if (window == NULL) goto failure;
+    renderer = SDL_CreateRenderer(window, SDL_SOFTWARE_RENDERER);
+    if (renderer == NULL) goto failure;
+    if (!SDL_SetRenderVSync(renderer, 1))
+        SDL_Log("Could not initialize renderer with VSync");
+    
+    window_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_INDEX8,
+            SDL_TEXTUREACCESS_STREAMING, GB_WIDTH, GB_HEIGHT);
+    if (window_tex == NULL) goto failure;
+    if (!SDL_SetTextureScaleMode(window_tex, SDL_SCALEMODE_PIXELART)) goto failure;
+
+    if (!init_palettes()) goto failure;
+    active_palette = 0;
+    if (!SDL_SetTexturePalette(window_tex, palettes[active_palette]))
+        goto failure;
 
     frame_mux = SDL_CreateMutex();
-    system_args sys_args  = (system_args){ argv[1], frame_mux };
+    if (frame_mux == NULL) goto failure;
+
+    if (argc >= 2)
+        rom_path = strdup(argv[1]);
+    else {
+        while (true) {
+            SDL_Event event;
+            SDL_WaitEvent(&event);
+            if (event.type == SDL_EVENT_DROP_FILE) {
+                rom_path = strdup(event.drop.data);
+                break;
+            }
+            else if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
+                goto close;
+        }
+    }
+
+    system_args sys_args = (system_args){ rom_path, frame_mux };
     if (!sys_init(sys_args))
         goto failure;
-    system_thread = SDL_CreateThread(&loop_system, "System", NULL);
+    system_thread = SDL_CreateThread(&loop_system, "MyDMG system", NULL);
     loop_window();
     SDL_WaitThread(system_thread, NULL);
     sys_deinit();
     
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(window_tex);
-    for (int i = 0; i < NUM_PALETTES; i++)
-        SDL_DestroyPalette(palettes[i]);
-    SDL_DestroyMutex(frame_mux);
-    SDL_Quit();
-    return 0;
+close:
+    if (window != NULL) SDL_DestroyWindow(window);
+    if (renderer != NULL) SDL_DestroyRenderer(renderer);
+    if (window_tex != NULL) SDL_DestroyTexture(window_tex);
+    for (int i = 0; i < NUM_PALETTES; i++) {
+        if (palettes[i] != NULL) SDL_DestroyPalette(palettes[i]);
+    }
+    if (frame_mux != NULL) SDL_DestroyMutex(frame_mux);
+    if (rom_path != NULL) free(rom_path);
+    if (sdl_init) SDL_Quit();
+    return code;
 failure:
-    /* TODO: Show message box (?) */
-    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
-    if (window != NULL)
-        SDL_DestroyWindow(window);
-    if (renderer != NULL)
-        SDL_DestroyRenderer(renderer);
-    if (window_tex != NULL)
-        SDL_DestroyTexture(window_tex);
-    if (sdl_initialized)
-        SDL_Quit();
-    return -1;
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", SDL_GetError(), window);
+    code = -1;
+    goto close;
 }
 
 static void loop_window()
@@ -131,35 +146,39 @@ static void loop_window()
     while (running) {
         SDL_RenderClear(renderer);
         SDL_LockMutex(frame_mux);
-        SDL_UpdateTexture(window_tex, NULL, sys_get_frame_buffer(), GB_WIDTH);
+        void *pixels;
+        int pitch;
+        SDL_LockTexture(window_tex, NULL, &pixels, &pitch);
+        memcpy(pixels, sys_get_frame_buffer(), GB_WIDTH * GB_HEIGHT);
+        SDL_UnlockTexture(window_tex);
         SDL_UnlockMutex(frame_mux);
         SDL_RenderTexture(renderer, window_tex, NULL, NULL);
         SDL_RenderPresent(renderer);
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-                    running = false;
-                    break;
-                case SDL_EVENT_KEY_DOWN:
-                    if (event.key.scancode >= SDL_SCANCODE_1 && event.key.scancode <= SDL_SCANCODE_9) {
-                        scale_factor = event.key.scancode - SDL_SCANCODE_1 + 1;
-                        window_width = scale_factor * GB_WIDTH;
-                        window_height = scale_factor * GB_HEIGHT;
-                        SDL_SetWindowSize(window, window_width, window_height);
-                    }
-                    if (event.key.scancode == SDL_SCANCODE_P) {
-                        active_palette = (active_palette + 1) % NUM_PALETTES;
-                        SDL_SetTexturePalette(window_tex, palettes[active_palette]);
-                    }
-                    break;
+            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                running = false;
+                break;
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.scancode >= SDL_SCANCODE_1 &&
+                    event.key.scancode <= SDL_SCANCODE_9) {
+                    scale_factor = event.key.scancode - SDL_SCANCODE_1 + 1;
+                    window_width = scale_factor * GB_WIDTH;
+                    window_height = scale_factor * GB_HEIGHT;
+                    SDL_SetWindowSize(window, window_width, window_height);
+                }
+                else if (event.key.scancode == SDL_SCANCODE_P) {
+                    active_palette = (active_palette + 1) % NUM_PALETTES;
+                    SDL_SetTexturePalette(window_tex, palettes[active_palette]);
+                }
             }
         }
     }
 }
 
-static int loop_system(void* data)
+static int loop_system(void *_)
 {
     Uint64 counter_freq = SDL_GetPerformanceFrequency();
     Uint64 next_frame = SDL_GetPerformanceCounter();

@@ -1,6 +1,6 @@
 #include "bus.h"
 #include "system.h"
-#include "cart.h"
+#include "cartridge.h"
 #include "timer.h"
 #include "cpu.h"
 #include "ppu.h"
@@ -259,7 +259,7 @@ static byte io_read(uint16_t addr)
         case TIMA_REG: return timer_tima_read();
         case TMA_REG:  return timer_tma_read();
         case TAC_REG:  return timer_tac_read();
-        case IF_REG:   return interrupt_if_read();
+        case IF_REG:   return int_if_read();
         /* ... */
         case LCDC_REG: return ppu_lcdc_read();
         case STAT_REG: return ppu_stat_read();
@@ -274,7 +274,7 @@ static byte io_read(uint16_t addr)
         case WY_REG:   return ppu_wy_read();
         case WX_REG:   return ppu_wx_read();
         /* ... */
-        case IE_REG:   return interrupt_ie_read();
+        case IE_REG:   return int_ie_read();
         default: return 0xFF;
     }
 }
@@ -288,7 +288,7 @@ static void io_write(uint16_t addr, byte val)
         case TIMA_REG: timer_tima_write(val);   break;
         case TMA_REG:  timer_tma_write(val);    break;
         case TAC_REG:  timer_tac_write(val);    break;
-        case IF_REG:   interrupt_if_write(val); break;
+        case IF_REG:   int_if_write(val); break;
         /* ... */
         case LCDC_REG: ppu_lcdc_write(val);     break;
         case STAT_REG: ppu_stat_write(val);     break;
@@ -303,7 +303,7 @@ static void io_write(uint16_t addr, byte val)
         case WY_REG:   ppu_wy_write(val);       break;
         case WX_REG:   ppu_wx_write(val);       break;
         /* ... */
-        case IE_REG:   interrupt_ie_write(val); break;
+        case IE_REG:   int_ie_write(val); break;
     }
 }
 

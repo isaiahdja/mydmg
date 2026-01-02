@@ -21,7 +21,7 @@ add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 
 add_executable(mydmg
     src/main.c
-    src/cart.c
+    src/cartridge.c
     src/system.c
     src/bus.c
     src/timer.c

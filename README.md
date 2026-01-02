@@ -4,18 +4,27 @@
 MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.  
 It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD display controller).
 
-https://github.com/user-attachments/assets/6fe36318-a972-4c59-bb6c-2aa8deb1ee4d
-
 ## Building
 
-MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
+MyDMG requires [Simple DirectMedia Layer 3.0](https://github.com/libsdl-org/SDL/releases) as a shared library and can be built with CMake:
 
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
     cmake --build build
 
 ## Running
 
-    ./mydmg [path to ROM file]
+Simply run the executable and drop the ROM file into the window, or pass the path to the ROM file as the first argument.
+
+## Features
+
+- Supported memory bank controllers (MBCs):
+    - No MBC
+    - MBC 1
+    - MBC 3
+- Save games
+    - Battery-backed cartridge RAM is written to a .sav file.
+    - Save files are stored in the same directory and share the provided ROM’s filename.
+    - Save files are automatically loaded when reopening the same ROM.
 
 ## Default controls
 
@@ -32,21 +41,11 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 | 1 - 9 | Set window scale |
 | P | Toggle palette |
 
-## Features
-
-- Supported memory bank controllers (MBCs):
-    - No MBC
-    - MBC 1
-    - MBC 3
-- Save games
-    - Battery-backed cartridge RAM is written to a .sav file
-    - Save files are stored in the same directory and share the provided ROM’s filename
-    - Save files are automatically loaded when reopening the same ROM
-
 ## Potential future improvements
-- Further debugging and general accuracy improvements
 - Audio support
 - Additional MBC support
+- General accuracy and compatibility improvements
+- Support 2D accelerated rendering
 - GUI with more customization options and other extra features, e.g.:
     - Configurable controls
     - Save states
@@ -61,19 +60,19 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - Sharp SM83 core (custom 8-bit CPU) with 5 hardware interrupt sources
 - 160×144 pixel monochrome LCD with 2-bit color depth tile-based rendering
 - 64 KiB address space (16-bit address bus, 8-bit data bus), supporting cartridge bank-switching
-- Memory-mapped I/O
 - Direct memory access (DMA) mechanism for transferring object attribute memory
+- Memory-mapped I/O
 
 ## Testing
 
 - [SM83 SingleStepTests](https://github.com/SingleStepTests/sm83)
-    - CPU logic is compiled as its own library for unit testing
-    - Python script using ctypes runs the tests by loading the initial state from JSON, ticking the CPU by the requisite number of cycles, and comparing the final state
+    - CPU logic is compiled as its own library for unit testing.
+    - Python script using ctypes runs the tests by loading the initial state from JSON, ticking the CPU by the requisite number of cycles, and comparing the final state.
 - [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
 - [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/gb-test-roms)
 - [dmg-acid2](https://github.com/mattcurrie/dmg-acid2)
 
-MyDMG has been built for the Windows Subsytem for Linux (WSL2) with GCC, and Windows 11 with MSVC.
+MyDMG has been built with GCC on the Windows Subsystem for Linux (WSL2) and with MSVC on Windows 11.
 
 ## Resources
 

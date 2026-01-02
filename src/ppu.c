@@ -358,7 +358,7 @@ static void mode2_dot()
 
 static void mode3_dot()
 {
-    if (obj_enable() && need_to_fetch_obj)
+    if (need_to_fetch_obj)
         obj_fetcher_dot();
     bg_fetcher_dot();
 
@@ -534,13 +534,13 @@ static bool bg_fifo_fill(pixel *p)
 }
 
 static bool obj_fifo_fill(pixel *p)
-{
+{ 
     /* Merge. */
     int j = 0;
     while (j < 8) {
         pixel new = p[j];
         pixel old;
-        if ((fifo_pop(&obj_fifo, &old) && old.palette_idx != 0))
+        if (fifo_pop(&obj_fifo, &old) && old.palette_idx != 0)
             obj_fifo.pixels[j] = old;
         else
             obj_fifo.pixels[j] = new;
@@ -555,7 +555,10 @@ static bool obj_fifo_fill(pixel *p)
 /* */
 
 static void check_win_lx() {
-    if (!window_mode && bg_win_enable() && win_enable() && wy_check && lx_reg + 7 == wx_reg) {
+    if (window_mode || !(bg_win_enable() && win_enable()))
+        return;
+
+    if (wy_check && (byte)(lx_reg + 7) == wx_reg) {
         fifo_clear(&bg_fifo); fetcher_clear(&bg_fetcher);
         window_mode = true;
     }
@@ -568,6 +571,9 @@ static void fetcher_clear(fetcher *f) {
 static void check_objs_lx()
 {
     need_to_fetch_obj = false;
+    if (!obj_enable())
+        return;
+    
     for (int i = 0; i < scanline_objs_count; i++) {
         obj_slot_type obj_slot = scanline_objs[i];
         if ((byte)(lx_reg + 8) == obj_slot.obj_x) {
@@ -578,7 +584,7 @@ static void check_objs_lx()
     }
 }
 
-/* TODO: Implement slice fetcher "stealing." */
+/* TODO: Implement slice fetcher "stealing" for object penalties. */
 static void bg_fetcher_dot()
 {
     switch (bg_fetcher.dot) {

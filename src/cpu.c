@@ -85,8 +85,8 @@ bool cpu_init(void)
 {
     memory_read = &bus_read_cpu;
     memory_write = &bus_write_cpu;
-    receive_int = &interrupt_send_interrupt;
-    pending_int = &interrupt_pending;
+    receive_int = &int_send_interrupt;
+    pending_int = &pending_interrupt;
 
     /* DMG boot handoff state. */
     state = (cpu_state){
