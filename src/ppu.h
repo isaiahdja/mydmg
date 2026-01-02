@@ -23,7 +23,7 @@ byte oam_read(uint16_t addr);
 void oam_write(uint16_t addr, byte val);
 
 ppu_mode ppu_get_mode(void);
-uint32_t *ppu_get_frame_buffer(void);
+uint8_t *ppu_get_frame_buffer(void);
 
 byte ppu_lcdc_read(void);
 void ppu_lcdc_write(byte val);

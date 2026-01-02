@@ -10,7 +10,6 @@ https://github.com/user-attachments/assets/6fe36318-a972-4c59-bb6c-2aa8deb1ee4d
 
 MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 
-    mkdir build
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build
 
@@ -21,17 +20,17 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 ## Default controls
 
 | Scancode | Effect |
-| -------- | ------ |
-| RETURN   | Start  |
-| RSHIFT   | Select |
-| Z        | B      |
-| X        | A      |
-| UP       | Up     |
-| DOWN     | Down   |
-| LEFT     | Left   |
-| RIGHT    | Right  |
-| EQUALS   | Zoom in window  |
-| MINUS    | Zoom out window |
+| --- | --- |
+| RETURN | Start |
+| RSHIFT | Select
+| Z | B |
+| X | A |
+| UP | Up |
+| DOWN | Down |
+| LEFT | Left |
+| RIGHT | Right |
+| 1 - 9 | Set window scale |
+| P | Toggle palette |
 
 ## Features
 
@@ -49,7 +48,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - Audio support
 - Additional MBC support
 - Performance optimizations
-- GUI with customization options and other extra features, e.g.:
+- GUI with more customization options and other extra features, e.g.:
     - Configurable controls
     - Save states
 - Debug window to view registers and memory, with single-stepping capability
@@ -61,7 +60,7 @@ MyDMG uses Simple DirectMedia Layer (SDL3) and can be built with CMake:
 - "DMG-CPU" system on a chip (SoC) design
 - ~4.19 MHz clock (T-cycles), or ~1.05 MHz clock (M-cycles)
 - Sharp SM83 core (custom 8-bit CPU) with 5 hardware interrupt sources
-- 160×144 pixel monochrome LCD with 2-bit color depth and tile-based rendering
+- 160×144 pixel monochrome LCD with 2-bit color depth tile-based rendering
 - 64 KiB address space (16-bit address bus, 8-bit data bus), supporting cartridge bank-switching
 - Memory-mapped I/O
 - Direct memory access (DMA) mechanism for transferring object attribute memory

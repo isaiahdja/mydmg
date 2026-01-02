@@ -4,18 +4,21 @@ project(mydmg)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-add_library(sm83 SHARED
-    src/cpu.c
-)
-target_include_directories(sm83 PRIVATE src)
-target_compile_definitions(sm83 PRIVATE
-    SM83
-    DEBUG
-)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_library(sm83 SHARED src/cpu.c)
+    target_include_directories(sm83 PRIVATE src)
+    target_compile_definitions(sm83 PRIVATE SM83 DEBUG)
+endif()
 
 set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
+
 add_executable(mydmg
     src/main.c
     src/cart.c
@@ -30,23 +33,10 @@ add_executable(mydmg
 )
 target_include_directories(mydmg PRIVATE src)
 target_link_libraries(mydmg PRIVATE SDL3::SDL3)
-target_compile_definitions(mydmg PRIVATE
-    $<$<CONFIG:Debug>:DEBUG>
-)
-target_compile_options(mydmg PRIVATE
-    $<$<CONFIG:Debug>:
-        -Wall -Wextra -Wpedantic
-        -Og
-        -g
-        -fno-omit-frame-pointer
-        -fsanitize=address,undefined
-    >
-    $<$<CONFIG:Release>:
-        -O3
-    >
-)
-target_link_options(mydmg PRIVATE
-    $<$<CONFIG:Debug>:
-        -fsanitize=address,undefined
-    >
-)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(mydmg PRIVATE DEBUG)
+    target_compile_options(mydmg PRIVATE -Wall -Wextra -Wpedantic -Og)
+else()
+    target_compile_options(mydmg PRIVATE -O3)
+endif()

@@ -68,14 +68,12 @@ static inline int get_palette_color(byte palette, int idx) {
 
 static byte wy_reg, wx_reg;
 
-static uint32_t dmg_colors[4] = {
-    0xFF9a9e3f, /* 100% */
-    0xFF496b22, /*  66% */
-    0xFF0e450b, /*  33% */
-    0xFF1b2a09  /*   0% */
-};
-static uint32_t frame_buffer[GB_HEIGHT * GB_WIDTH];
-static uint32_t off_buffer[GB_HEIGHT * GB_WIDTH];
+static uint8_t frame_buffer[GB_HEIGHT * GB_WIDTH];
+static uint8_t front_buffer[GB_HEIGHT * GB_WIDTH];
+static uint8_t off_buffer[GB_HEIGHT * GB_WIDTH];
+static inline void commit_frame(void) {
+    memcpy(front_buffer, frame_buffer, sizeof(front_buffer));
+}
 
 static ppu_mode mode;
 static void set_mode(ppu_mode _mode);
@@ -173,7 +171,7 @@ bool ppu_init(void)
 
     scanline_counter = 0;
     for (int i = 0; i < GB_WIDTH * GB_HEIGHT; i++)
-        off_buffer[i] = dmg_colors[0] + 0x00050505;
+        off_buffer[i] = 4;
 
     return true;
 }
@@ -212,8 +210,10 @@ void ppu_tick(void)
                 win_y = 0;
             }
             
-            if (ly_reg >= GB_HEIGHT)
+            if (ly_reg >= GB_HEIGHT) {
+                commit_frame();
                 set_mode(MODE1_VBLANK);
+            }
             else
                 set_mode(MODE2_OAM);
         }
@@ -308,12 +308,12 @@ void oam_write(uint16_t addr, byte val) {
 ppu_mode ppu_get_mode() {
     return mode;
 }
-uint32_t *ppu_get_frame_buffer() {
+uint8_t *ppu_get_frame_buffer() {
     /* "When re-enabling the LCD, the PPU will immediately start drawing again,
        but the screen will stay blank during the first frame." "*/
     if (mode == LCD_DISABLED || just_enabled)
         return off_buffer;
-    return frame_buffer;
+    return front_buffer;
 }
 
 static void mode0_dot()
@@ -402,7 +402,7 @@ static void mode3_dot()
         }
 
         if (lx_reg < GB_WIDTH)
-            frame_buffer[ly_reg * GB_WIDTH + lx_reg] = dmg_colors[color];
+            frame_buffer[ly_reg * GB_WIDTH + lx_reg] = color;
 
         if (++lx_reg == GB_WIDTH) {
             //printf("Mode 3 length = %d\n", scanline_counter - 80 + 1);
