@@ -30,6 +30,7 @@ add_executable(mydmg
     src/interrupt.c
     src/input.c
     src/dma.c
+    src/apu.c
 )
 target_include_directories(mydmg PRIVATE src)
 target_link_libraries(mydmg PRIVATE SDL3::SDL3)

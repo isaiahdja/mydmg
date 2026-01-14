@@ -34,11 +34,11 @@ static bool init_palettes()
     if (bw_palette == NULL)
         return false;
     SDL_Color bw_colors[5] = {
-        color_from_hex(0xE0E0E0),
-        color_from_hex(0xB0B0B0),
-        color_from_hex(0x707070),
-        color_from_hex(0x303030),
-        color_from_hex(0xF0F0F0)
+        color_from_hex(0xEAEAEA),
+        color_from_hex(0xAFAFAF),
+        color_from_hex(0x606060),
+        color_from_hex(0x191919),
+        color_from_hex(0xF9F9F9)
     };
     if (!SDL_SetPaletteColors(bw_palette, bw_colors,0, 5))
         return false;
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 {
     int code = 0;
 
-    bool sdl_init = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS); 
+    bool sdl_init = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS| SDL_INIT_AUDIO); 
     if (!sdl_init) goto failure;
     
     scale_factor = 4;

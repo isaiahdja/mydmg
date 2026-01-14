@@ -143,12 +143,12 @@ bool cart_init(const char *rom_path)
     /* Define save paths. */
     int rom_path_len = strlen(rom_path);
 
-    int sav_path_len = rom_path_len + 4 + 1; /* .sav + \0 */
-    sav_path = malloc(sav_path_len);
+    int sav_path_len = rom_path_len + 4; /* + .sav */
+    sav_path = malloc(sav_path_len + 1);
     strcpy(sav_path, rom_path);
 
-    int rtc_path_len = rom_path_len + 4 + 1; /* .rtc + \0 */
-    rtc_path = malloc(rtc_path_len);
+    int rtc_path_len = rom_path_len + 4; /* .rtc */
+    rtc_path = malloc(rtc_path_len + 1);
     strcpy(rtc_path, rom_path);
 
     int last_dot = -1;

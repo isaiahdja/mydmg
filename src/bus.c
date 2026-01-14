@@ -7,6 +7,7 @@
 #include "interrupt.h"
 #include "input.h"
 #include "dma.h"
+#include "apu.h"
 
 #include <stdio.h>
 
@@ -275,8 +276,15 @@ static byte io_read(uint16_t addr)
         case WX_REG:   return ppu_wx_read();
         /* ... */
         case IE_REG:   return int_ie_read();
-        default: return 0xFF;
     }
+    if (addr >= NR10_REG && addr <= NR14_REG)
+        return apu_ch1_read(addr);
+    else if (addr >= NR21_REG && addr <= NR24_REG)
+        return apu_ch2_read(addr);
+    else if (addr >= NR50_REG && addr <= NR52_REG)
+        return apu_ctrl_read(addr);
+    
+    return 0xFF;
 }
 
 static void io_write(uint16_t addr, byte val)
@@ -305,6 +313,13 @@ static void io_write(uint16_t addr, byte val)
         /* ... */
         case IE_REG:   int_ie_write(val); break;
     }
+
+    if (addr >= NR10_REG && addr <= NR14_REG)
+        apu_ch1_write(addr, val);
+    else if (addr >= NR21_REG && addr <= NR24_REG)
+        apu_ch2_write(addr, val);
+    else if (addr >= NR50_REG && addr <= NR52_REG)
+        apu_ctrl_write(addr, val);
 }
 
 /* Echo region maps to WRAM. */

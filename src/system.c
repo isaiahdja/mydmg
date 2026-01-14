@@ -7,6 +7,7 @@
 #include "input.h"
 #include "dma.h"
 #include "cartridge.h"
+#include "apu.h"
 
 /* Work RAM. */
 static byte wram[WRAM_SIZE];
@@ -20,7 +21,8 @@ bool sys_init(system_args args)
         int_init() &&
         ppu_init(args.frame_mux) &&
         input_init() &&
-        dma_init()
+        dma_init() &&
+        apu_init()
     );
 }
 
@@ -31,6 +33,7 @@ void sys_tick()
     cpu_tick();
     ppu_tick();
     timer_tick();
+    apu_tick();
 }
 
 void sys_start_frame()

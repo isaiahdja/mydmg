@@ -38,8 +38,22 @@ typedef enum {
 
 #define JOYP_REG 0xFF00
 
-#define SB_REG   0xFF01
-#define SC_REG   0xFF02
+#define NR10_REG 0xFF10
+#define NR11_REG 0xFF11
+#define NR12_REG 0xFF12
+#define NR13_REG 0xFF13
+#define NR14_REG 0xFF14
+
+#define NR21_REG 0xFF16
+#define NR22_REG 0xFF17
+#define NR23_REG 0xFF18
+#define NR24_REG 0xFF19
+
+/* ....*/
+
+#define NR50_REG 0xFF24
+#define NR51_REG 0xFF25
+#define NR52_REG 0xFF26
 
 #define DIV_REG  0xFF04
 #define TIMA_REG 0xFF05

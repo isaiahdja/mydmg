@@ -2,6 +2,7 @@
 #include "system.h"
 #include <stdint.h>
 #include "interrupt.h"
+#include "apu.h"
 
 /* Divider and timer. */
 
@@ -25,6 +26,8 @@ static bit prev_timer_signal = 0;
 static bool timer_overflowed = false;
 static byte tma_overflow_save;
 
+static bit prev_div_signal = 0;
+
 static void update_tac_caches();
 
 bool timer_init(void)
@@ -39,7 +42,7 @@ bool timer_init(void)
     return true;
 }
 
-static void check_signal(void) {
+static void check_timer_signal(void) {
     bit next_timer_signal =
         get_bit(system_counter, tac_counter_bit_idx) & tac_enable;
     if (next_timer_signal == 0 && prev_timer_signal == 1) {
@@ -58,13 +61,19 @@ void timer_tick(void)
     system_counter += T_M_RATIO;
     div_reg = system_counter >> 8;
 
+    /* Check DIv-APU signal. */
+    bit next_div_signal = get_bit(div_reg, 4);
+    if (next_div_signal == 0 && prev_div_signal == 1) {
+        incr_div_apu();
+    }
+
     if (timer_overflowed) {
         timer_overflowed = false;
         tima_reg = tma_overflow_save;
         request_interrupt(INT_TIMER);
     }
 
-    check_signal();
+    check_timer_signal();
 }
 
 static void update_tac_caches()
@@ -84,7 +93,7 @@ byte timer_div_read() {
 }
 void timer_div_write(byte val) {
     system_counter = 0;
-    check_signal();
+    check_timer_signal();
 }
 
 byte timer_tima_read() {
@@ -107,5 +116,5 @@ byte timer_tac_read() {
 void timer_tac_write(byte val) {
     tac_reg = overlay_masked(tac_reg, val, TAC_RW_MASK);
     update_tac_caches();
-    check_signal();
+    check_timer_signal();
 }

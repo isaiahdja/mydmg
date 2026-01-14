@@ -6,7 +6,7 @@ It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i
 
 ## Building
 
-MyDMG requires [Simple DirectMedia Layer 3.0](https://github.com/libsdl-org/SDL/releases) as a shared library and can be built with CMake:
+MyDMG uses [Simple DirectMedia Layer 3.0](https://github.com/libsdl-org/SDL/releases) and can be built with CMake:
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
     cmake --build build
