@@ -5,6 +5,8 @@ MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.
 It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD controller).
 Audio is in progress and is downsampled to 44.1kHz.
 
+https://github.com/user-attachments/assets/81e0250e-4a07-4426-a748-42e71799185a
+
 ## Building
 
 MyDMG uses [Simple DirectMedia Layer 3.0](https://github.com/libsdl-org/SDL/releases) and can be built with CMake:
