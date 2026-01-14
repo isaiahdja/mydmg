@@ -18,6 +18,8 @@ MyDMG uses [Simple DirectMedia Layer 3.0](https://github.com/libsdl-org/SDL/rele
 
 Simply run the executable and drop the ROM file into the window, or pass the path to the ROM file as the first argument.
 
+ROM files for community-developed software can be found on [Homebrew Hub](https://hh.gbdev.io/).
+
 ## Features
 
 - Supported memory bank controllers (MBCs):
