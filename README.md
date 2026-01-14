@@ -2,7 +2,8 @@
 # MyDMG
 
 MyDMG is an emulator for the original Nintendo Game Boy (DMG), written in C.  
-It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD display controller).
+It attempts to implement an "M-cycle"-accurate CPU and "T-cycle"-accurate PPU (i.e. LCD controller).
+Audio is in progress and is downsampled to 44.1kHz.
 
 ## Building
 
@@ -42,7 +43,7 @@ Simply run the executable and drop the ROM file into the window, or pass the pat
 | P | Toggle palette |
 
 ## Potential future improvements
-- Audio support
+- Finish audio support
 - Additional MBC support
 - General accuracy and compatibility improvements
 - Support 2D accelerated rendering
@@ -58,7 +59,8 @@ Simply run the executable and drop the ROM file into the window, or pass the pat
 - "DMG-CPU" system on a chip (SoC) design
 - ~4.19 MHz clock (T-cycles), or ~1.05 MHz clock (M-cycles)
 - Sharp SM83 core (custom 8-bit CPU) with 5 hardware interrupt sources
-- 160×144 pixel monochrome LCD with 2-bit color depth tile-based rendering
+- 160×144 pixel monochrome LCD with 2-bit color depth and tile-based rendering
+- 4-channel sound chip with stereo output
 - 64 KiB address space (16-bit address bus, 8-bit data bus), supporting cartridge bank-switching
 - Direct memory access (DMA) mechanism for transferring object attribute memory
 - Memory-mapped I/O
