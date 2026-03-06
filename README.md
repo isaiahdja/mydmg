@@ -48,6 +48,7 @@ ROM files for community-developed software can be found on [Homebrew Hub](https:
 
 ## Potential future improvements
 - Finish audio support
+- Check for use of undefined behavior
 - Additional MBC support
 - General accuracy and compatibility improvements
 - Support 2D accelerated rendering
